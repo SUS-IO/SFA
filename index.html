@@ -86,7 +86,7 @@ async function boot() {
   if (error || !p) { await sb.auth.signOut(); return toast("Profile error: " + (error ? error.message : "no row returned"), false); }
   if (p.is_active === false || p.active === false) { await sb.auth.signOut(); return toast("Your account is inactive", false); }
   me = p; me.uid = session.user.id;
-  $("who").textContent = (p.full_name || p.name || p.user_id || "User") + " · " + p.role;
+  $("who").textContent = (p.user_name || p.user_id) + " · " + p.role;
   $("login").classList.add("hide"); $("app").classList.remove("hide");
   locs = (await run(sb.from("locations").select("*").order("name"))) || [];
   setInterval(async () => { if (Date.now() - (+localStorage.getItem("sfa_login_at")) > SIX_H) { await sb.auth.signOut(); location.reload(); } }, 60000);
@@ -176,9 +176,9 @@ async function payments() {
     sb.from("payments").select("*, deliveries(delivery_no)").order("created_at", { ascending: false }).limit(100),
     sb.from("deliveries").select("id,delivery_no").in("ops_status", ["pending", "active"]),
     sb.from("profiles").select("*").limit(200)]);
-  const nameOf = id => { const x = (e.data || []).find(z => z.id === id); return x ? (x.full_name || x.name || x.user_id || "") : "—"; };
+  const nameOf = id => { const x = (e.data || []).find(z => z.id === id); return x ? (x.user_name || x.user_id || "") : "—"; };
   const dopt = (d.data || []).map(x => `<option value="${x.id}">${esc(x.delivery_no)}</option>`).join("");
-  const eopt = `<option value="">Me</option>` + (e.data || []).filter(x => x.id !== me.uid).map(x => `<option value="${x.id}">${esc(x.full_name || x.name || x.user_id)}</option>`).join("");
+  const eopt = `<option value="">Me</option>` + (e.data || []).filter(x => x.id !== me.uid).map(x => `<option value="${x.id}">${esc(x.user_name || x.user_id)}</option>`).join("");
   $("pay").innerHTML = `<div class="box"><b>Record a payment</b><div class="grid"><div><label>Delivery</label><select id="yd">${dopt}</select></div>
     <div><label>Type</label><select id="yt"><option value="booking_advance">Booking advance</option><option value="rent">Rent</option><option value="deposit">Deposit</option><option value="extension">Extension</option><option value="refund">Refund</option><option value="other">Other</option></select></div>
     <div><label>Amount (₹)</label><input id="ya" type="number" min="1"></div><div><label>Method</label><select id="ym"><option value="cash">Cash</option><option value="online">Online</option></select></div>
