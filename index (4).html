@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SFA Bike Rental</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--navy:#102A43;--blue:#1565C0;--pink:#F26A8D;--bg:#F4F7FB;--cyan:#CBEEF3;--line:#d9e2ec}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,Segoe UI,sans-serif;background:var(--bg);color:#1f2d3d}
+.hide{display:none!important}
+#login{max-width:340px;margin:12vh auto;background:#fff;padding:28px;border:1px solid var(--line);border-radius:10px}
+#login h1{margin:0 0 4px;color:var(--navy);font-size:22px}
+label{display:block;font-size:13px;margin:10px 0 3px;color:#486581}
+input,select,textarea{width:100%;padding:9px;border:1px solid #bcccdc;border-radius:6px;font:inherit}
+button{padding:9px 14px;border:0;border-radius:6px;background:var(--blue);color:#fff;font:inherit;cursor:pointer}
+button.alt{background:#fff;color:var(--navy);border:1px solid #bcccdc}button.pink{background:var(--pink)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--cyan);outline-offset:1px}
+#app{display:flex;min-height:100vh}
+nav{width:200px;background:var(--navy);color:#fff;padding:16px 10px;flex-shrink:0}
+nav b{display:block;padding:6px 10px 14px;font-size:17px}
+nav a{display:block;padding:9px 10px;border-radius:6px;color:#cfe0f1;cursor:pointer}
+nav a.on{background:var(--blue);color:#fff}
+main{flex:1;min-width:0}
+header{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;background:#fff;border-bottom:1px solid var(--line)}
+section{padding:20px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px}
+.card span{font-size:26px;color:var(--navy);font-weight:600;display:block}
+.box{background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0 12px}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;background:#fff}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{background:#eef3f8;color:#486581;font-weight:600}
+.b{padding:2px 8px;border-radius:99px;font-size:12px;background:var(--cyan);color:var(--navy)}
+.b.pending{background:#ffe3ec;color:#a3254a}.b.active,.b.available,.b.acknowledged{background:#d8f3dc;color:#1b5e20}
+#toast{position:fixed;bottom:16px;right:16px;padding:12px 16px;border-radius:8px;color:#fff;max-width:340px}
+@media(max-width:700px){#app{flex-direction:column}nav{width:100%;display:flex;overflow-x:auto;gap:4px;padding:8px}nav b{display:none}nav a{white-space:nowrap}}
+</style></head><body>
+<div id="login"><h1>SFA Bike Rental</h1><div style="color:#627d98">Sign in with your employee User ID</div>
+<label for="uid">User ID</label><input id="uid" autocomplete="username">
+<label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
+<p><button id="go" style="width:100%">Sign in</button></p></div>
+
+<div id="app" class="hide">
+<nav><b>SFA Bikes</b><a data-t="dash" class="on">Dashboard</a><a data-t="veh">Vehicles</a><a data-t="prebook">Pre-bookings</a><a data-t="del">Deliveries</a><a data-t="pay">Payments</a></nav>
+<main><header><span id="who"></span><button class="alt" id="out">Log out</button></header>
+<section id="dash"></section><section id="veh" class="hide"></section><section id="prebook" class="hide"></section>
+<section id="del" class="hide"></section><section id="pay" class="hide"></section></main></div>
+<div id="toast" class="hide"></div>
+
+<script>
+// ===== CONFIG: paste your PUBLIC values (Supabase > Project Settings > API). Never the service_role key. =====
+const SUPABASE_URL = "PASTE_PROJECT_URL";
+const SUPABASE_ANON_KEY = "PASTE_PUBLISHABLE_OR_ANON_KEY";
+// ==========================================================================================================
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const inr = n => "₹" + Number(n || 0).toLocaleString("en-IN");
+const nm = c => c ? (c.full_name || c.name || c.customer_name || c.mobile || c.id) : "";
+let me = null, locs = [];
+const SIX_H = 6 * 3600 * 1000;
+
+function toast(msg, ok = true) {
+  const t = $("toast"); t.textContent = msg; t.style.background = ok ? "#2e7d32" : "#c62828";
+  t.classList.remove("hide"); setTimeout(() => t.classList.add("hide"), 4500);
+}
+async function run(p, okMsg) {   // success shown only after server confirms
+  const { data, error } = await p;
+  if (error) { toast(error.message, false); return null; }
+  if (okMsg) toast(okMsg); return data ?? true;
+}
+
+$("go").onclick = async () => {
+  const id = $("uid").value.trim().toLowerCase();
+  const { error } = await sb.auth.signInWithPassword({ email: id + "@sfabike.app", password: $("pw").value });
+  if (error) return toast("Wrong User ID or password", false);
+  localStorage.setItem("sfa_login_at", Date.now());
+  boot();
+};
+$("out").onclick = async () => { await sb.auth.signOut(); localStorage.removeItem("sfa_login_at"); location.reload(); };
+
+async function boot() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return;
+  const at = +localStorage.getItem("sfa_login_at") || 0;
+  if (Date.now() - at > SIX_H) { await sb.auth.signOut(); return toast("Session expired. Please sign in again.", false); }
+  const { data: p, error } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
+  if (error || !p) { await sb.auth.signOut(); return toast("No employee profile found for this login", false); }
+  if (p.is_active === false || p.active === false) { await sb.auth.signOut(); return toast("Your account is inactive", false); }
+  me = p; me.uid = session.user.id;
+  $("who").textContent = (p.full_name || p.name || p.user_id || "User") + " · " + p.role;
+  $("login").classList.add("hide"); $("app").classList.remove("hide");
+  locs = (await run(sb.from("locations").select("*").order("name"))) || [];
+  setInterval(async () => { if (Date.now() - (+localStorage.getItem("sfa_login_at")) > SIX_H) { await sb.auth.signOut(); location.reload(); } }, 60000);
+  show("dash");
+}
+document.querySelectorAll("nav a").forEach(a => a.onclick = () => show(a.dataset.t));
+function show(t) {
+  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.dataset.t === t));
+  document.querySelectorAll("main section").forEach(s => s.classList.toggle("hide", s.id !== t));
+  ({ dash, veh: vehicles, prebook, del: deliveries, pay: payments })[t]();
+}
+const isMgr = () => ["manager", "admin", "superadmin"].includes(me.role);
+const canApp = () => ["approver", "manager", "admin", "superadmin"].includes(me.role);
+const table = (heads, rows) => `<div class="tw"><table><tr>${heads.map(h => `<th>${h}</th>`).join("")}</tr>${rows.join("") || `<tr><td colspan="${heads.length}">Nothing here yet.</td></tr>`}</table></div>`;
+const locName = id => esc((locs.find(l => l.id === id) || {}).name || "—");
+
+async function dash() {
+  const [v, d, p] = await Promise.all([
+    sb.from("vehicles").select("status,location_id").eq("active", true),
+    sb.from("deliveries").select("ops_status,expected_return"),
+    sb.from("payments").select("ack_status,recipient_id")]);
+  const V = v.data || [], D = d.data || [], P = p.data || [], today = new Date().toISOString().slice(0, 10);
+  const c = (l, n) => `<div class="card">${l}<span>${n}</span></div>`;
+  $("dash").innerHTML = `<div class="cards">` +
+    c("Available bikes", V.filter(x => x.status === "available").length) + c("With customers", V.filter(x => x.status === "assigned").length) +
+    c("In service", V.filter(x => x.status === "service").length) + c("Active rentals", D.filter(x => x.ops_status === "active").length) +
+    c("Overdue rentals", D.filter(x => x.ops_status === "active" && x.expected_return < today).length) +
+    c("Deliveries to approve", D.filter(x => x.ops_status === "pending").length) +
+    c("Cash awaiting acknowledgement", P.filter(x => x.ack_status === "pending").length) + `</div>
+    <div class="box"><b>Available bikes by location</b>${table(["Location", "Bikes"], locs.map(l => `<tr><td>${esc(l.name)}</td><td>${V.filter(x => x.status === "available" && x.location_id === l.id).length}</td></tr>`))}</div>`;
+}
+
+async function vehicles() {
+  const { data } = await sb.from("vehicles").select("*").order("reg_no");
+  const opts = locs.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join("");
+  $("veh").innerHTML = (isMgr() ? `<div class="box"><b>Add a bike</b><div class="grid"><div><label>Registration number</label><input id="vr"></div><div><label>Model</label><input id="vm"></div>
+    <div><label>Location</label><select id="vl">${opts}</select></div></div><p><button id="vadd">Save bike</button></p></div>` : "") +
+    table(["Reg. no", "Model", "Location", "Status"], (data || []).map(v => `<tr><td>${esc(v.reg_no)}</td><td>${esc(v.model)}</td><td>${locName(v.location_id)}</td><td><span class="b ${v.status}">${v.status}</span></td></tr>`));
+  if (isMgr()) $("vadd").onclick = async () => {
+    if (!$("vr").value.trim()) return toast("Enter the registration number", false);
+    if (await run(sb.from("vehicles").insert({ reg_no: $("vr").value.trim().toUpperCase(), model: $("vm").value.trim(), location_id: $("vl").value }), "Bike saved")) vehicles();
+  };
+}
+
+async function prebook() {
+  const { data } = await sb.from("pre_bookings").select("*").order("created_at", { ascending: false }).limit(100);
+  $("prebook").innerHTML = `<div class="box"><b>New pre-booking</b><div class="grid"><div><label>Customer name</label><input id="pn"></div><div><label>Mobile (with country code)</label><input id="pm" inputmode="tel"></div>
+    <div><label>Expected delivery date</label><input id="pd" type="date"></div><div><label>Preferred bike</label><input id="pb"></div></div>
+    <label>Remarks</label><input id="pr"><p><button id="padd">Save pre-booking</button></p></div>` +
+    table(["Name", "Mobile", "Expected", "Bike", "Remarks"], (data || []).map(r => `<tr><td>${esc(r.customer_name)}</td><td>${esc(r.mobile)}</td><td>${esc(r.expected_date)}</td><td>${esc(r.preferred_bike)}</td><td>${esc(r.remarks)}</td></tr>`));
+  $("padd").onclick = async () => {
+    const m = $("pm").value.replace(/[\s-]/g, "");
+    if (!$("pn").value.trim() || !/^\+?\d{6,15}$/.test(m)) return toast("Enter a name and a valid mobile number", false);
+    if (await run(sb.from("pre_bookings").insert({ customer_name: $("pn").value.trim(), mobile: m, expected_date: $("pd").value || null, preferred_bike: $("pb").value, remarks: $("pr").value, created_by: me.uid }), "Pre-booking saved")) prebook();
+  };
+}
+
+async function deliveries() {
+  const [d, v, c] = await Promise.all([
+    sb.from("deliveries").select("*, vehicles(reg_no), customers(*)").order("created_at", { ascending: false }).limit(100),
+    sb.from("vehicles").select("id,reg_no,location_id").eq("status", "available").eq("active", true),
+    sb.from("customers").select("*").eq("status", "active").limit(500)]);
+  const co = (c.data || []).map(x => `<option value="${x.id}">${esc(nm(x))}</option>`).join("");
+  const vo = (v.data || []).map(x => `<option value="${x.id}">${esc(x.reg_no)} — ${locName(x.location_id)}</option>`).join("");
+  $("del").innerHTML = `<div class="box"><b>New delivery</b> <small>(only approved customers and bikes available at an office are listed)</small><div class="grid">
+    <div><label>Customer</label><select id="dc">${co}</select></div><div><label>Bike</label><select id="dv">${vo}</select></div>
+    <div><label>Days</label><input id="dd" type="number" min="1" value="1"></div><div><label>Daily rate (₹)</label><input id="dr" type="number" min="0"></div>
+    <div><label>Deposit (₹)</label><input id="dp" type="number" min="0" value="0"></div><div><label>Delivery charges (₹)</label><input id="dg" type="number" min="0" value="0"></div>
+    <div><label>Starting odometer (km)</label><input id="do" type="number" min="0"></div></div>
+    <p id="sum" style="color:#486581"></p><button id="dadd">Save delivery</button></div>` +
+    table(["No.", "Customer", "Bike", "Days", "Rent", "Deposit", "Return by", "Status", ""], (d.data || []).map(r => `<tr><td>${esc(r.delivery_no)}</td><td>${esc(nm(r.customers))}</td><td>${esc(r.vehicles?.reg_no)}</td><td>${r.days}</td><td>${inr(r.total_rent)}</td><td>${inr(r.deposit)}</td><td>${esc(r.expected_return)}</td>
+      <td><span class="b ${r.ops_status}">${r.ops_status}</span></td><td>${r.ops_status === "pending" && canApp() ? `<button data-a="${r.id}">Approve</button> <button class="pink" data-r="${r.id}">Reject</button>` : ""}</td></tr>`));
+  const calc = () => $("sum").textContent = `Rent ${inr($("dd").value * $("dr").value)} + charges ${inr($("dg").value)} = ${inr($("dd").value * $("dr").value + +$("dg").value)} due; deposit ${inr($("dp").value)} held separately.`;
+  ["dd", "dr", "dg", "dp"].forEach(i => $(i).oninput = calc); calc();
+  $("dadd").onclick = async () => {
+    if (!$("dc").value || !$("dv").value || !$("dr").value) return toast("Choose a customer, a bike and enter the daily rate", false);
+    if (await run(sb.rpc("create_delivery", { p_customer: $("dc").value, p_vehicle: $("dv").value, p_days: +$("dd").value, p_rate: +$("dr").value, p_deposit: +$("dp").value, p_charges: +$("dg").value, p_odo: $("do").value ? +$("do").value : null }), "Delivery saved and sent for approval")) deliveries();
+  };
+  document.querySelectorAll("[data-a],[data-r]").forEach(b => b.onclick = async () => {
+    const ok = !!b.dataset.a, rem = prompt(ok ? "Approval remarks (optional)" : "Reason for rejecting"); if (rem === null) return;
+    if (await run(sb.rpc("decide_delivery", { p_id: b.dataset.a || b.dataset.r, p_approve: ok, p_remarks: rem }), ok ? "Delivery approved" : "Delivery rejected")) deliveries();
+  });
+}
+
+async function payments() {
+  const [p, d, e] = await Promise.all([
+    sb.from("payments").select("*, deliveries(delivery_no)").order("created_at", { ascending: false }).limit(100),
+    sb.from("deliveries").select("id,delivery_no").in("ops_status", ["pending", "active"]),
+    sb.from("profiles").select("*").limit(200)]);
+  const nameOf = id => { const x = (e.data || []).find(z => z.id === id); return x ? (x.full_name || x.name || x.user_id || "") : "—"; };
+  const dopt = (d.data || []).map(x => `<option value="${x.id}">${esc(x.delivery_no)}</option>`).join("");
+  const eopt = `<option value="">Me</option>` + (e.data || []).filter(x => x.id !== me.uid).map(x => `<option value="${x.id}">${esc(x.full_name || x.name || x.user_id)}</option>`).join("");
+  $("pay").innerHTML = `<div class="box"><b>Record a payment</b><div class="grid"><div><label>Delivery</label><select id="yd">${dopt}</select></div>
+    <div><label>Type</label><select id="yt"><option value="booking_advance">Booking advance</option><option value="rent">Rent</option><option value="deposit">Deposit</option><option value="extension">Extension</option><option value="refund">Refund</option><option value="other">Other</option></select></div>
+    <div><label>Amount (₹)</label><input id="ya" type="number" min="1"></div><div><label>Method</label><select id="ym"><option value="cash">Cash</option><option value="online">Online</option></select></div>
+    <div><label>Reference</label><input id="yr"></div><div><label>Cash received by</label><select id="ye">${eopt}</select></div></div>
+    <p><button id="yadd">Save payment</button></p></div>` +
+    table(["Delivery", "Type", "Amount", "Method", "Received by", "Acknowledgement", ""], (p.data || []).map(r => `<tr><td>${esc(r.deliveries?.delivery_no)}</td><td>${r.pay_type}</td><td>${inr(r.amount)}</td><td>${r.method}</td><td>${esc(nameOf(r.recipient_id || r.recorded_by))}</td>
+      <td><span class="b ${r.ack_status}">${r.ack_status.replace("_", " ")}</span></td><td>${r.ack_status === "pending" && r.recipient_id === me.uid ? `<button data-k="${r.id}">Acknowledge</button>` : ""}</td></tr>`));
+  let key = crypto.randomUUID();   // same key on retry = no duplicate payment
+  $("yadd").onclick = async () => {
+    if (!$("yd").value || !(+$("ya").value > 0)) return toast("Choose a delivery and enter an amount", false);
+    if (await run(sb.rpc("record_payment", { p_delivery: $("yd").value, p_type: $("yt").value, p_amount: +$("ya").value, p_method: $("ym").value, p_reference: $("yr").value || null, p_recipient: $("ye").value || null, p_key: key }), "Payment saved")) { key = crypto.randomUUID(); payments(); }
+  };
+  document.querySelectorAll("[data-k]").forEach(b => b.onclick = async () => { if (await run(sb.rpc("acknowledge_payment", { p_id: b.dataset.k }), "Receipt acknowledged")) payments(); });
+}
+boot();
+</script></body></html>
