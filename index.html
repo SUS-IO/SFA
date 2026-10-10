@@ -83,7 +83,7 @@ async function boot() {
   const at = +localStorage.getItem("sfa_login_at") || 0;
   if (Date.now() - at > SIX_H) { await sb.auth.signOut(); return toast("Session expired. Please sign in again.", false); }
   const { data: p, error } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
-  if (error || !p) { await sb.auth.signOut(); return toast("No employee profile found for this login", false); }
+  if (error || !p) { await sb.auth.signOut(); return toast("Profile error: " + (error ? error.message : "no row returned"), false); }
   if (p.is_active === false || p.active === false) { await sb.auth.signOut(); return toast("Your account is inactive", false); }
   me = p; me.uid = session.user.id;
   $("who").textContent = (p.full_name || p.name || p.user_id || "User") + " · " + p.role;
