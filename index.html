@@ -71,7 +71,7 @@ async function run(p, okMsg) {   // success shown only after server confirms
 $("go").onclick = async () => {
   const id = $("uid").value.trim().toLowerCase();
   const { error } = await sb.auth.signInWithPassword({ email: id + "@sfabike.app", password: $("pw").value });
-  if (error) return toast("Wrong User ID or password", false);
+  if (error) return toast(error.message, false);
   localStorage.setItem("sfa_login_at", Date.now());
   boot();
 };
