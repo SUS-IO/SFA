@@ -39,10 +39,10 @@ th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white
 <p><button id="go" style="width:100%">Sign in</button></p></div>
 
 <div id="app" class="hide">
-<nav><b>SFA Bikes</b><a data-t="dash" class="on">Dashboard</a><a data-t="veh">Vehicles</a><a data-t="cust">Customers</a><a data-t="prebook">Pre-bookings</a><a data-t="del">Deliveries</a><a data-t="pay">Payments</a></nav>
+<nav><b>SFA Bikes</b><a data-t="dash" class="on">Dashboard</a><a data-t="veh">Vehicles</a><a data-t="cust">Customers</a><a data-t="prebook">Pre-bookings</a><a data-t="del">Deliveries</a><a data-t="pay">Payments</a><a data-t="adm" id="navadm" class="hide">Admin</a></nav>
 <main><header><span id="who"></span><button class="alt" id="out">Log out</button></header>
 <section id="dash"></section><section id="veh" class="hide"></section><section id="cust" class="hide"></section><section id="prebook" class="hide"></section>
-<section id="del" class="hide"></section><section id="pay" class="hide"></section></main></div>
+<section id="del" class="hide"></section><section id="pay" class="hide"></section><section id="adm" class="hide"></section></main></div>
 <div id="pwbox" class="hide" style="position:fixed;inset:0;background:rgba(16,42,67,.88);display:flex;align-items:center;justify-content:center;z-index:9"><div class="box" style="width:320px;margin:0"><b>Set a new password</b><p style="color:#486581">Choose a new password before you continue.</p><label for="np">New password (8+ characters)</label><input id="np" type="password" autocomplete="new-password"><label for="np2">Type it again</label><input id="np2" type="password" autocomplete="new-password"><p><button id="npgo">Save password</button></p></div></div>
 <div id="toast" class="hide"></div>
 
@@ -92,6 +92,7 @@ async function boot() {
   me = p; me.uid = session.user.id;
   $("who").textContent = (p.user_name || p.user_id) + " · " + p.role;
   $("login").classList.add("hide"); $("app").classList.remove("hide");
+  if (["admin", "superadmin"].includes(p.role)) $("navadm").classList.remove("hide");
   if (p.must_change_password) await forcePw();
   locs = (await run(sb.from("locations").select("*").order("name"))) || [];
   setInterval(async () => { if (Date.now() - (+localStorage.getItem("sfa_login_at")) > SIX_H) { await sb.auth.signOut(); location.reload(); } }, 60000);
@@ -113,7 +114,7 @@ document.querySelectorAll("nav a").forEach(a => a.onclick = () => show(a.dataset
 function show(t) {
   document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.dataset.t === t));
   document.querySelectorAll("main section").forEach(s => s.classList.toggle("hide", s.id !== t));
-  ({ dash, veh: vehicles, cust: customersPage, prebook, del: deliveries, pay: payments })[t]();
+  ({ dash, veh: vehicles, cust: customersPage, prebook, del: deliveries, pay: payments, adm: adminPage })[t]();
 }
 const isMgr = () => ["manager", "admin", "superadmin"].includes(me.role);
 const canApp = () => ["approver", "manager", "admin", "superadmin"].includes(me.role);
@@ -212,23 +213,25 @@ async function payments() {
 }
 // ===== Customers =====
 const PH = [["dl_image1","Driving licence, front"],["dl_image2","Driving licence, back"],["mobile_verification","Mobile verification screenshot"],["aadhar_photo1","Aadhaar, front"],["aadhar_photo2","Aadhaar, back"],["aadhar_otp_proof","Aadhaar OTP proof"],["emergency_verification1","Emergency contact 1 verification"],["customer_image","Customer photo"],["emergency_verification2","Emergency contact 2 verification (only if contact 2 is given)"]];
-async function shrink(file) {   // resize + compress in the browser, fixes phone rotation
+const enc = (c, q) => new Promise(r => c.toBlob(x => x && x.type === "image/webp" ? r(x) : c.toBlob(r, "image/jpeg", q), "image/webp", q));
+async function shrink(file, maxDim = 1280, maxBytes = 180000) {   // small but readable; WebP where the browser can, else JPEG
   const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
-  let scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height)), q = 0.75, blob;
-  for (let i = 0; i < 6; i++) {
+  let scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height)), q = 0.7, blob;
+  for (let i = 0; i < 10; i++) {
     const c = document.createElement("canvas"); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
     c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-    blob = await new Promise(r => c.toBlob(r, "image/jpeg", q));
-    if (blob.size < 1500000) return blob;
-    scale *= 0.8; q = Math.max(0.5, q - 0.05);
+    blob = await enc(c, q);
+    if (blob.size <= maxBytes) return blob;
+    q -= 0.1; if (q < 0.4) { q = 0.6; scale *= 0.85; }
   }
-  throw new Error("A photo is too large even after shrinking. Use a smaller photo.");
+  if (blob.size > 1500000) throw new Error("A photo is too large even after shrinking. Use a smaller photo.");
+  return blob;
 }
 const upCache = new Map(); let cBusy = false;   // cache: a retry never uploads the same photo twice
 async function upload(file) {
   if (upCache.has(file)) return upCache.get(file);
-  const blob = await shrink(file), path = "customers/" + crypto.randomUUID() + ".jpg";
-  const { error } = await sb.storage.from("photos").upload(path, blob, { contentType: "image/jpeg" });
+  const blob = await shrink(file), path = "customers/" + crypto.randomUUID() + (blob.type === "image/webp" ? ".webp" : ".jpg");
+  const { error } = await sb.storage.from("photos").upload(path, blob, { contentType: blob.type });
   if (error) throw new Error("Photo upload failed: " + error.message);
   upCache.set(file, path); return path;
 }
@@ -282,6 +285,69 @@ async function viewPhotos(id) {
   $("cphotos").innerHTML = `<div class="box"><b>${esc(c.name)}: documents</b> <button class="alt" id="cclose">Close</button><div class="grid" style="margin-top:10px">` +
     data.map((d, i) => `<div><small>${esc(items[i][0])}</small><br>${d.signedUrl ? `<a href="${d.signedUrl}" target="_blank" rel="noopener"><img src="${d.signedUrl}" alt="${esc(items[i][0])}" style="max-width:100%;border-radius:6px"></a>` : "You do not have permission to open this"}</div>`).join("") + `</div></div>`;
   $("cclose").onclick = () => $("cphotos").innerHTML = "";
+}
+// ===== Admin panel =====
+let aTab = "users";
+const ROLE_LIST = ["executive", "tele_caller", "approver", "manager", "admin", "superadmin"];
+const roleOpts = sel => ROLE_LIST.filter(r => me.role === "superadmin" || r !== "superadmin").map(r => `<option value="${r}" ${r === sel ? "selected" : ""}>${r.replace("_", " ")}</option>`).join("");
+function adminCall(body, okMsg) {   // privileged user changes run inside Supabase, never in the browser
+  return run((async () => {
+    const { data, error } = await sb.functions.invoke("admin-users", { body });
+    if (error) { let m = error.message; try { m = (await error.context.json()).error || m; } catch (_) {} return { error: { message: m } }; }
+    return { data: data || true };
+  })(), okMsg);
+}
+async function adminPage() {
+  if (!["admin", "superadmin"].includes(me.role)) { $("adm").innerHTML = "Only admins can open this page."; return; }
+  const tabs = [["users", "Users"], ["loc", "Locations"], ["hel", "Helmets"], ["aud", "Audit log"]];
+  $("adm").innerHTML = `<p>${tabs.map(([k, l]) => `<button class="${aTab === k ? "" : "alt"}" data-at="${k}">${l}</button>`).join(" ")}</p><div id="atab"></div>`;
+  document.querySelectorAll("[data-at]").forEach(b => b.onclick = () => { aTab = b.dataset.at; adminPage(); });
+  await ({ users: aUsers, loc: aLoc, hel: aHel, aud: aAudit })[aTab]();
+}
+async function aUsers() {
+  const { data } = await sb.from("profiles").select("*").order("user_id");
+  $("atab").innerHTML = `<div class="box"><b>Add a user</b> <small>(they must choose their own password at first login)</small><div class="grid">
+    <div><label>User ID</label><input id="uu"></div><div><label>Name</label><input id="un"></div><div><label>Role</label><select id="ur">${roleOpts("executive")}</select></div>
+    <div><label>Temporary password</label><input id="up"></div></div><p><button id="uadd">Create user</button></p></div>` +
+    table(["User ID", "Name", "Role", "Status", "Password", ""], (data || []).map(u => {
+      const self = u.id === me.uid, locked = self || (u.role === "superadmin" && me.role !== "superadmin");
+      return `<tr><td>${esc(u.user_id)}</td><td>${esc(u.user_name)}</td>
+      <td>${locked ? esc(u.role) : `<select data-ro="${u.id}">${roleOpts(u.role)}</select>`}</td>
+      <td><span class="b ${u.active ? "active" : "pending"}">${u.active ? "active" : "switched off"}</span></td><td>${u.must_change_password ? "must change" : "set"}</td>
+      <td>${locked ? "" : `<button class="alt" data-ac="${u.id}" data-to="${!u.active}">${u.active ? "Switch off" : "Switch on"}</button> <button class="alt" data-rp="${u.id}">Reset password</button>`}</td></tr>`;
+    }));
+  $("uadd").onclick = async () => {
+    const f = i => $(i).value.trim();
+    if (!f("uu") || !f("un") || f("up").length < 8) return toast("Enter a User ID, a name and a temporary password of 8+ characters", false);
+    if (await adminCall({ action: "create", user_id: f("uu"), user_name: f("un"), role: $("ur").value, password: f("up") }, "User created. Give them the User ID and temporary password.")) aUsers();
+  };
+  document.querySelectorAll("[data-ro]").forEach(s => s.onchange = async () => { if (await adminCall({ action: "update", id: s.dataset.ro, role: s.value }, "Role changed")) aUsers(); else aUsers(); });
+  document.querySelectorAll("[data-ac]").forEach(b => b.onclick = async () => { if (confirm(b.dataset.to === "true" ? "Switch this user on?" : "Switch this user off? They will not be able to sign in.") && await adminCall({ action: "update", id: b.dataset.ac, active: b.dataset.to === "true" }, "User updated")) aUsers(); });
+  document.querySelectorAll("[data-rp]").forEach(b => b.onclick = async () => {
+    const pw = prompt("Type a temporary password (8+ characters). The user must change it at next login."); if (!pw) return;
+    await adminCall({ action: "reset_password", id: b.dataset.rp, password: pw }, "Password reset");
+  });
+}
+async function aLoc() {
+  const { data } = await sb.from("locations").select("*").order("name"); locs = data || locs;
+  $("atab").innerHTML = `<div class="box"><b>Add a location</b><div class="grid"><div><label>Type</label><select id="lt"><option>Office</option><option>Service Centre</option></select></div>
+    <div><label>Name</label><input id="ln"></div></div><p><button id="ladd">Save location</button></p></div>` +
+    table(["Name", "Type", "Status", ""], (data || []).map(l => `<tr><td>${esc(l.name)}</td><td>${esc(l.type)}</td><td><span class="b ${l.active ? "active" : "pending"}">${l.active ? "in use" : "switched off"}</span></td>
+      <td><button class="alt" data-lc="${l.id}" data-to="${!l.active}">${l.active ? "Switch off" : "Switch on"}</button></td></tr>`));
+  $("ladd").onclick = async () => { if (!$("ln").value.trim()) return toast("Enter the location name", false); if (await run(sb.from("locations").insert({ type: $("lt").value, name: $("ln").value.trim() }), "Location saved")) aLoc(); };
+  document.querySelectorAll("[data-lc]").forEach(b => b.onclick = async () => { if (await run(sb.from("locations").update({ active: b.dataset.to === "true" }).eq("id", b.dataset.lc), "Location updated")) aLoc(); });
+}
+async function aHel() {
+  const { data } = await sb.from("helmets").select("*").order("tag");
+  $("atab").innerHTML = `<div class="box"><b>Add a helmet</b><div class="grid"><div><label>Helmet tag (for example A1)</label><input id="ht"></div>
+    <div><label>Location</label><select id="hl">${locs.filter(l => l.active).map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join("")}</select></div></div><p><button id="hadd">Save helmet</button></p></div>` +
+    table(["Tag", "Location", "Status"], (data || []).map(h => `<tr><td>${esc(h.tag)}</td><td>${locName(h.location_id)}</td><td><span class="b ${h.status}">${h.status}</span></td></tr>`));
+  $("hadd").onclick = async () => { const t = $("ht").value.replace(/\s+/g, "").toUpperCase(); if (!t) return toast("Enter the helmet tag", false); if (await run(sb.from("helmets").insert({ tag: t, location_id: $("hl").value }), "Helmet saved")) aHel(); };
+}
+async function aAudit() {
+  const [a, p] = await Promise.all([sb.from("audit_events").select("*").order("created_at", { ascending: false }).limit(100), sb.from("profiles").select("id,user_id")]);
+  const who = id => (p.data || []).find(x => x.id === id)?.user_id || "—";
+  $("atab").innerHTML = a.error ? `<div class="box">Audit log needs manager level or higher.</div>` : table(["When", "Who", "What", "Record"], (a.data || []).map(e => `<tr><td>${esc(new Date(e.created_at).toLocaleString("en-IN"))}</td><td>${esc(who(e.actor))}</td><td>${esc(e.action)}</td><td>${esc(e.record_table)}</td></tr>`));
 }
 boot();
 </script></body></html>
