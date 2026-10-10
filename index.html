@@ -50,7 +50,7 @@ th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white
 const SUPABASE_URL = "https://lkxosnadtoesncmeooxd.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_A7qFMJd0HsX0r-GnIefwCQ_v-ATVxlv";
 // ==========================================================================================================
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = supabase.createClient(SUPABASE_URL.replace(/\/rest\/v1\/?$/, ""), SUPABASE_ANON_KEY);
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const inr = n => "₹" + Number(n || 0).toLocaleString("en-IN");
