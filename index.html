@@ -39,17 +39,15 @@ th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white
 <p><button id="go" style="width:100%">Sign in</button></p></div>
 
 <div id="app" class="hide">
-<nav><b>SFA Bikes</b><a data-t="dash" class="on">Dashboard</a><a data-t="veh">Vehicles</a><a data-t="prebook">Pre-bookings</a><a data-t="del">Deliveries</a><a data-t="pay">Payments</a></nav>
+<nav><b>SFA Bikes</b><a data-t="dash" class="on">Dashboard</a><a data-t="veh">Vehicles</a><a data-t="cust">Customers</a><a data-t="prebook">Pre-bookings</a><a data-t="del">Deliveries</a><a data-t="pay">Payments</a></nav>
 <main><header><span id="who"></span><button class="alt" id="out">Log out</button></header>
-<section id="dash"></section><section id="veh" class="hide"></section><section id="prebook" class="hide"></section>
+<section id="dash"></section><section id="veh" class="hide"></section><section id="cust" class="hide"></section><section id="prebook" class="hide"></section>
 <section id="del" class="hide"></section><section id="pay" class="hide"></section></main></div>
+<div id="pwbox" class="hide" style="position:fixed;inset:0;background:rgba(16,42,67,.88);display:flex;align-items:center;justify-content:center;z-index:9"><div class="box" style="width:320px;margin:0"><b>Set a new password</b><p style="color:#486581">Choose a new password before you continue.</p><label for="np">New password (8+ characters)</label><input id="np" type="password" autocomplete="new-password"><label for="np2">Type it again</label><input id="np2" type="password" autocomplete="new-password"><p><button id="npgo">Save password</button></p></div></div>
 <div id="toast" class="hide"></div>
 
+<script src="config.js"></script>
 <script>
-// ===== CONFIG: paste your PUBLIC values (Supabase > Project Settings > API). Never the service_role key. =====
-const SUPABASE_URL = "https://lkxosnadtoesncmeooxd.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_A7qFMJd0HsX0r-GnIefwCQ_v-ATVxlv";
-// ==========================================================================================================
 const sb = supabase.createClient(SUPABASE_URL.replace(/\/rest\/v1\/?$/, ""), SUPABASE_ANON_KEY);
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -62,14 +60,20 @@ function toast(msg, ok = true) {
   const t = $("toast"); t.textContent = msg; t.style.background = ok ? "#2e7d32" : "#c62828";
   t.classList.remove("hide"); setTimeout(() => t.classList.add("hide"), 4500);
 }
+let pending = 0;   // saves in progress: all buttons stay locked until the server answers
+const lockUI = on => document.querySelectorAll("main button").forEach(b => b.disabled = on);
+document.addEventListener("click", e => { if (e.target.closest("main button")) setTimeout(() => { if (pending) lockUI(true); }, 0); });
 async function run(p, okMsg) {   // success shown only after server confirms
-  const { data, error } = await p;
-  if (error) { toast(error.message, false); return null; }
-  if (okMsg) toast(okMsg); return data ?? true;
+  if (okMsg) pending++;
+  try {
+    const { data, error } = await p;
+    if (error) { toast(error.code === "23505" ? "This already exists, so it was not saved again" : error.message, false); return null; }
+    if (okMsg) toast(okMsg); return data ?? true;
+  } finally { if (okMsg && --pending === 0) lockUI(false); }
 }
 
 $("go").onclick = async () => {
-  const id = $("uid").value.trim().toLowerCase();
+  const id = $("uid").value.trim().toLowerCase().replace("@sfabike.app", "");
   const { error } = await sb.auth.signInWithPassword({ email: id + "@sfabike.app", password: $("pw").value });
   if (error) return toast(error.message, false);
   localStorage.setItem("sfa_login_at", Date.now());
@@ -88,15 +92,28 @@ async function boot() {
   me = p; me.uid = session.user.id;
   $("who").textContent = (p.user_name || p.user_id) + " · " + p.role;
   $("login").classList.add("hide"); $("app").classList.remove("hide");
+  if (p.must_change_password) await forcePw();
   locs = (await run(sb.from("locations").select("*").order("name"))) || [];
   setInterval(async () => { if (Date.now() - (+localStorage.getItem("sfa_login_at")) > SIX_H) { await sb.auth.signOut(); location.reload(); } }, 60000);
   show("dash");
+}
+function forcePw() {
+  return new Promise(done => {
+    $("pwbox").classList.remove("hide");
+    $("npgo").onclick = async () => {
+      const a = $("np").value;
+      if (a.length < 8 || a !== $("np2").value) return toast("Use at least 8 characters, typed the same twice", false);
+      const { error } = await sb.auth.updateUser({ password: a });
+      if (error) return toast(error.message, false);
+      if (await run(sb.rpc("mark_password_changed"))) { $("pwbox").classList.add("hide"); toast("Password changed"); done(); }
+    };
+  });
 }
 document.querySelectorAll("nav a").forEach(a => a.onclick = () => show(a.dataset.t));
 function show(t) {
   document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.dataset.t === t));
   document.querySelectorAll("main section").forEach(s => s.classList.toggle("hide", s.id !== t));
-  ({ dash, veh: vehicles, prebook, del: deliveries, pay: payments })[t]();
+  ({ dash, veh: vehicles, cust: customersPage, prebook, del: deliveries, pay: payments })[t]();
 }
 const isMgr = () => ["manager", "admin", "superadmin"].includes(me.role);
 const canApp = () => ["approver", "manager", "admin", "superadmin"].includes(me.role);
@@ -127,7 +144,7 @@ async function vehicles() {
     table(["Reg. no", "Model", "Location", "Status"], (data || []).map(v => `<tr><td>${esc(v.reg_no)}</td><td>${esc(v.model)}</td><td>${locName(v.location_id)}</td><td><span class="b ${v.status}">${v.status}</span></td></tr>`));
   if (isMgr()) $("vadd").onclick = async () => {
     if (!$("vr").value.trim()) return toast("Enter the registration number", false);
-    if (await run(sb.from("vehicles").insert({ reg_no: $("vr").value.trim().toUpperCase(), model: $("vm").value.trim(), location_id: $("vl").value }), "Bike saved")) vehicles();
+    if (await run(sb.from("vehicles").insert({ reg_no: $("vr").value.replace(/\s+/g, "").toUpperCase(), model: $("vm").value.trim(), location_id: $("vl").value }), "Bike saved")) vehicles();
   };
 }
 
@@ -192,6 +209,79 @@ async function payments() {
     if (await run(sb.rpc("record_payment", { p_delivery: $("yd").value, p_type: $("yt").value, p_amount: +$("ya").value, p_method: $("ym").value, p_reference: $("yr").value || null, p_recipient: $("ye").value || null, p_key: key }), "Payment saved")) { key = crypto.randomUUID(); payments(); }
   };
   document.querySelectorAll("[data-k]").forEach(b => b.onclick = async () => { if (await run(sb.rpc("acknowledge_payment", { p_id: b.dataset.k }), "Receipt acknowledged")) payments(); });
+}
+// ===== Customers =====
+const PH = [["dl_image1","Driving licence, front"],["dl_image2","Driving licence, back"],["mobile_verification","Mobile verification screenshot"],["aadhar_photo1","Aadhaar, front"],["aadhar_photo2","Aadhaar, back"],["aadhar_otp_proof","Aadhaar OTP proof"],["emergency_verification1","Emergency contact 1 verification"],["customer_image","Customer photo"],["emergency_verification2","Emergency contact 2 verification (only if contact 2 is given)"]];
+async function shrink(file) {   // resize + compress in the browser, fixes phone rotation
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+  let scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height)), q = 0.75, blob;
+  for (let i = 0; i < 6; i++) {
+    const c = document.createElement("canvas"); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    blob = await new Promise(r => c.toBlob(r, "image/jpeg", q));
+    if (blob.size < 1500000) return blob;
+    scale *= 0.8; q = Math.max(0.5, q - 0.05);
+  }
+  throw new Error("A photo is too large even after shrinking. Use a smaller photo.");
+}
+const upCache = new Map(); let cBusy = false;   // cache: a retry never uploads the same photo twice
+async function upload(file) {
+  if (upCache.has(file)) return upCache.get(file);
+  const blob = await shrink(file), path = "customers/" + crypto.randomUUID() + ".jpg";
+  const { error } = await sb.storage.from("photos").upload(path, blob, { contentType: "image/jpeg" });
+  if (error) throw new Error("Photo upload failed: " + error.message);
+  upCache.set(file, path); return path;
+}
+async function customersPage() {
+  const { data } = await sb.from("customers").select("id,name,mobile,status,created_at").order("created_at", { ascending: false }).limit(200);
+  $("cust").innerHTML = `<div class="box"><b>Register a customer</b> <small>(saved as pending until an approver approves)</small>
+    <div class="grid"><div><label>Full name</label><input id="cn"></div><div><label>Mobile</label><input id="cm" inputmode="tel"></div><div><label>Second mobile (optional)</label><input id="cm2" inputmode="tel"></div></div>
+    <label>Permanent address</label><textarea id="ca" rows="2"></textarea>
+    <div class="grid"><div><label>Emergency contact name</label><input id="en"></div><div><label>Relation</label><input id="er1"></div><div><label>Number</label><input id="e1" inputmode="tel"></div>
+    <div><label>Second contact relation (optional)</label><input id="er2"></div><div><label>Second contact number</label><input id="e2" inputmode="tel"></div></div>
+    <p><b>Photos</b> <small>(shrunk automatically before upload)</small></p><div class="grid">
+    ${PH.map(([k, l]) => `<div><label for="f_${k}">${l}</label><input id="f_${k}" type="file" accept="image/*"></div>`).join("")}
+    <div><label for="f_add">Additional proofs (up to 5)</label><input id="f_add" type="file" accept="image/*" multiple></div></div>
+    <label>Remarks</label><input id="cr"><p><button id="cadd">Save customer</button></p></div><div id="cphotos"></div>` +
+    table(["Name", "Mobile", "Status", "Registered", ""], (data || []).map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.mobile)}</td><td><span class="b ${c.status}">${c.status}</span></td><td>${esc(c.created_at.slice(0, 10))}</td>
+      <td><button class="alt" data-p="${c.id}">Documents</button> ${c.status === "pending" && canApp() ? `<button data-ap="${c.id}">Approve</button>` : ""}
+      ${c.status === "active" && isMgr() ? `<button class="pink" data-bl="${c.id}">Block</button>` : ""}${c.status === "blocked" && isMgr() ? `<button data-ub="${c.id}">Unblock</button>` : ""}</td></tr>`));
+  $("cadd").onclick = async () => {
+    if (cBusy) return;
+    const g = i => $(i).value.trim(), mob = v => v.replace(/[\s\-()]/g, ""), ok = v => /^\+?[0-9]{5,20}$/.test(v);
+    const m = mob(g("cm")), m2 = mob(g("cm2")), n1 = mob(g("e1")), n2 = mob(g("e2"));
+    if (!g("cn") || !g("ca") || !g("en") || !g("er1")) return toast("Fill in name, address and the first emergency contact", false);
+    if (!ok(m) || !ok(n1) || (m2 && !ok(m2)) || (n2 && !ok(n2))) return toast("Mobile numbers need 5 to 20 digits (a leading + is allowed)", false);
+    const missing = PH.filter(([k]) => k !== "emergency_verification2" && !$("f_" + k).files[0]);
+    if (missing.length) return toast("Add this photo: " + missing[0][1], false);
+    if ((g("er2") || n2) && !$("f_emergency_verification2").files[0]) return toast("Add the verification photo for contact 2", false);
+    const adds = [...$("f_add").files]; if (adds.length > 5) return toast("At most 5 additional proofs", false);
+    cBusy = true; const btn = $("cadd"); btn.disabled = true; btn.textContent = "Uploading photos…";
+    try {
+      const row = { name: g("cn"), permanent_address: g("ca"), mobile: m, mobile2: m2 || null, emergency_name: g("en"), emergency_relation1: g("er1"), emergency_number1: n1,
+        emergency_relation2: g("er2") || null, emergency_number2: n2 || null, additional_proofs: [], remarks: g("cr") || null };
+      for (const [k] of PH) { const f = $("f_" + k).files[0]; if (f) row[k] = await upload(f); }
+      for (const f of adds) row.additional_proofs.push(await upload(f));
+      if (await run(sb.from("customers").insert(row), "Customer saved, waiting for approval")) return customersPage();
+    } catch (e) { toast(e.message, false); }
+    finally { cBusy = false; if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = "Save customer"; } }
+  };
+  document.querySelectorAll("[data-ap],[data-bl],[data-ub],[data-p]").forEach(b => b.onclick = async () => {
+    if (b.dataset.p) return viewPhotos(b.dataset.p);
+    const st = b.dataset.bl ? "blocked" : "active", id = b.dataset.ap || b.dataset.bl || b.dataset.ub;
+    if (!confirm(b.dataset.bl ? "Block this customer?" : b.dataset.ub ? "Unblock this customer?" : "Approve this customer?")) return;
+    if (await run(sb.from("customers").update({ status: st }).eq("id", id), "Customer updated")) customersPage();
+  });
+}
+async function viewPhotos(id) {
+  const { data: c, error } = await sb.from("customers").select("*").eq("id", id).single();
+  if (error) return toast(error.message, false);
+  const items = [...PH.map(([k, l]) => [l, c[k]]), ...(c.additional_proofs || []).map((p, i) => ["Additional proof " + (i + 1), p])].filter(x => x[1]);
+  const { data, error: e2 } = await sb.storage.from("photos").createSignedUrls(items.map(x => x[1]), 120);
+  if (e2) return toast("Cannot open documents: " + e2.message, false);
+  $("cphotos").innerHTML = `<div class="box"><b>${esc(c.name)}: documents</b> <button class="alt" id="cclose">Close</button><div class="grid" style="margin-top:10px">` +
+    data.map((d, i) => `<div><small>${esc(items[i][0])}</small><br>${d.signedUrl ? `<a href="${d.signedUrl}" target="_blank" rel="noopener"><img src="${d.signedUrl}" alt="${esc(items[i][0])}" style="max-width:100%;border-radius:6px"></a>` : "You do not have permission to open this"}</div>`).join("") + `</div></div>`;
+  $("cclose").onclick = () => $("cphotos").innerHTML = "";
 }
 boot();
 </script></body></html>
