@@ -41,7 +41,7 @@ function kmLimitField() {
     validate() { const v = this.value(); if (!/^\d+$/.test(v) || Number(v) < 100) { f.setError('Choose the km limit, 100 or more.'); return false; } return true; } };
 }
 
-// Standardized 7-photo inspection checklist (Odometer, Front, Rear, Left, Right, Helmet + 6 extra additional pics)
+// Standardized 7-photo inspection checklist (Odometer, Front, Rear, Left, Right, Helmet + 6 extra additional pics)[cite: 17]
 function inspectionPhotos(title) {
   const odo = photoField({ label: 'Odometer Pic', required: true });
   const front = photoField({ label: 'Bike Front Pic', required: true });
@@ -139,7 +139,7 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
     if (type === 'customer_pickup') {
       const locObj = state.locations.find(l => l.id === v.current_location_id);
       if (!locObj || locObj.type !== 'Office') {
-        alert('Error: Vehicle must be at an Office location for customer pickup.');
+        alert('Error: Vehicle must be at an Office location for customer pickup.');[cite: 13, 17]
         handoverType.value = '';
         return;
       }
@@ -180,7 +180,7 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
   };
   [rent, dep, dch, apc, oa].forEach(i => i.addEventListener('input', recalc));
   
-  // Payment editor restricted to Income only during Delivery
+  // Payment editor restricted to Income only during Delivery[cite: 18]
   const pay = paymentsEditor({ title: 'Payments received', purposes: ['Rent', 'Deposit', 'Delivery charges', 'Booking Amount'], first: 'Rent', hint: 'All delivery payments are Income received.', onTotal: (t) => { paySum = t; recalc(); } });
   recalc();
 
@@ -309,7 +309,6 @@ export function openPickupForm({ delivery, rentalDays, helmetsOut, onDone }) {
   const ot = input({ placeholder: 'For example Scratch on tank' }); const oa = moneyInput(); const fOa = field('Other charge amount', oa);
   const cond = textarea({ rows: '2', placeholder: 'Condition of vehicle' }); 
   
-  // Pickup stage includes standard 7-photo inspection checklist
   const photos = inspectionPhotos('Vehicle inspection photos at return (pickup)');
   
   const refund = moneyInput(); const fRef = field('Deposit refund now (optional)', refund, { hint: `Deposit taken: ${fmtMoney(delivery.deposit)}.` });
@@ -317,7 +316,6 @@ export function openPickupForm({ delivery, rentalDays, helmetsOut, onDone }) {
   const refPhoto = photoField({ label: 'Refund receipt photo' }); const fRefPhoto = h('div', { class: 'stack-sm' }, refPhoto.el);
   refVia.addEventListener('change', () => { fRefHolder.hidden = refVia.value !== 'Cash'; fRefPhoto.hidden = refVia.value === 'Cash'; });
   
-  // Pickup stage allows both Income and Expense tabs (for refunds / extra charges)
   const pay = paymentsEditor({ title: 'Payments received now (optional)', purposes: ['Extra km', 'Balance'], first: 'Balance' });
   
   const upd = () => {
@@ -347,4 +345,24 @@ export function openPickupForm({ delivery, rentalDays, helmetsOut, onDone }) {
     sectionBlock('Deposit refund', h('div', { class: 'grid-2' }, fRef, field('Paid by', refVia)), fRefHolder, fRefPhoto));
   
   openSheet({ title: 'Pick up the vehicle', subtitle: delivery.code, body: form, footer: [btn('Cancel', { onClick: () => s.close() }), submit], wide: true });
+}
+
+// ---------------------------------------------------------------------------------------------
+export function openMoneyForm({ delivery = null, preset = null, onDone }) {
+  const type = select([{ value: 'Income', label: 'Income (money received)' }, { value: 'Expense', label: 'Expense (money paid out)' }]);
+  if (preset?.type) type.value = preset.type;
+  const dlSel = delivery ? null : input({ placeholder: 'Delivery number, for example DL0000012 (optional)' });
+  const pay = paymentsEditor({ title: 'Amount', purposes: ['Rent', 'Extension', 'Balance', 'Refundable Deposit', 'Fuel', 'Repair', 'Cancellation refund', 'Other'], first: preset?.purpose || '', firstAmount: preset?.amount || '', max: 1, optional: false, hint: 'Non-cash payments need a receipt photo.' });
+  const formId = 'mn-form'; const submit = submitBtn('Save', formId); const fDl = dlSel ? field('Delivery', dlSel, { hint: 'Fill this if the money belongs to a delivery.' }) : null;
+  const form = h('form', { id: formId, class: 'stack', novalidate: true, on: { submit: async (ev) => { ev.preventDefault();
+    if (!pay.validate()) return;
+    busy(submit, async () => { try {
+      let did = delivery?.id || null;
+      if (dlSel && dlSel.value.trim()) { const { data } = await sb.from('deliveries').select('id').ilike('code', dlSel.value.trim()).maybeSingle(); if (!data) return fDl.setError('No delivery with that number.'); did = data.id; }
+      const [line] = await pay.collect(`money/${folderId()}`);
+      await rpc('add_money', { p: { entry_type: type.value, delivery_id: did, ...line } });
+      toast('Saved'); s.close(); onDone?.();
+    } catch (e) { toast(friendlyError(e), 'error'); } });
+  } } }, field('Type', type), fDl, pay.el);
+  openSheet({ title: delivery ? (preset?.purpose === 'Refundable Deposit' ? 'Refund the deposit' : 'Add a payment') : 'Add income or expense', subtitle: delivery?.code, body: form, footer: [btn('Cancel', { onClick: () => s.close() }), submit] });
 }
