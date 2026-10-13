@@ -170,7 +170,9 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
       if (can.manager()) A('Reverse delivery', { ic: 'undo', onClick: () => cancel(d) });
     }
     if (d.status === 'active') {
-      P('Pick up', { ic: 'bike', onClick: () => openPickupForm({ delivery: d, rentalDays: d.days + activeExt.reduce((a2, e) => a2 + e.extra_days, 0), helmetsOut: x.helmets.filter(hh => !hh.returned_at), onDone: reload }) });
+      if (!liveSwap) {
+        P('Pick up', { ic: 'bike', onClick: () => openPickupForm({ delivery: d, rentalDays: d.days + activeExt.reduce((a2, e) => a2 + e.extra_days, 0), helmetsOut: x.helmets.filter(hh => !hh.returned_at), onDone: reload }) });
+      }
       A('Extend', { ic: 'clock', onClick: () => openExtendForm({ delivery: d, onDone: reload }) });
       if (can.assignSwap() && !liveSwap && !doneSwap) A('Assign a swap', { ic: 'move', onClick: () => openAssignSwap({ delivery: d, onDone: reload }) });
     }
@@ -217,7 +219,7 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
           e.status === 'pending' && (e.created_by === me || ap) || (e.status === 'approved' && can.manager() && d.status === 'active') ? btn('Cancel', { small: true, onClick: () => cancelExt(e) }) : null))))) : null,
       x.swaps.length ? sectionBlock('Swaps', h('ul', { class: 'pay-list' }, x.swaps.map(w => swapRow(w, d, x)))) : null,
       x.pickups.length ? sectionBlock('Pickup', h('ul', { class: 'pay-list' }, x.pickups.map(k => h('li', { class: 'pay-row stacked' }, h('div', { class: 'pay-row-top' }, h('div', null, h('strong', `Picked up at ${k.return_place || loc(k.return_location_id)?.name || ''}, ${fmtDateTime(k.returned_at)}`),
-        h('small', `${k.km_used} km used, ${k.allowed_km} km allowed over ${k.rental_days} days. ${k.extra_km} km extra = ${fmtMoney(k.extra_km_charge)}${k.other_charges_amount > 0 ? `. ${k.other_charges_text || 'Other'}: ${fmtMoney(k.other_charges_amount)}` : ''}.${k.condition_note ? ' ' + k.condition_note : ''}`), h('small', `By ${whoName(k.created_by)}`)),
+        h('small', `${k.km_used} km used, ${k.allowed_km} km allowed over ${k.rental_days} days. ${k.extra_km} km extra = ${fmtMoney(k.extra_km_charge)}${k.other_charges_amount > 0 ? `. ${k.other_charges_text \vert{}\vert{} 'Other'}:${fmtMoney(k.other_charges_amount)}` : ''}.${k.condition_note ? ' ' + k.condition_note : ''}`), h('small', `By ${whoName(k.created_by)}`)),
         h('div', { class: 'pay-act' }, k.status === 'approved' ? statusBadge('active', 'Approved') : k.status === 'cancelled' ? chip('Cancelled', 'neutral') : chip('Waiting for approval', 'blue'))),
         photoSetView(k.photo_set || legacySet(k.photos), 'Photos at return'))))) : null,
       dPhotoSet ? sectionBlock('Photos at handover', dPhotoSet) : null);
