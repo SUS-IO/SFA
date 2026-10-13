@@ -345,3 +345,51 @@ textarea.input { padding: 10px 13px; line-height: 1.45; resize: vertical; min-he
 .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13.5px; }
 .bill-line.ok { color: var(--green-ink); font-weight: 700; } .bill-line.due { color: var(--pink-ink); font-weight: 700; }
 .photo-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.customer-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+
+.customer-photo {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #eaf0f6;
+  color: #526579;
+}
+
+.customer-photo-placeholder {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.customer-photo-details {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.customer-photo-details strong,
+.customer-photo-details small {
+  overflow-wrap: anywhere;
+}
+
+.customer-picked-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
