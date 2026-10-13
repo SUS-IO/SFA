@@ -99,7 +99,6 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
     return s;
   }
 
-  // Customer photo preview element
   const custImg = h('img', { style: 'width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin-top: 6px; display: none;' });
   const custImgWrap = h('div', { class: 'field' }, custImg);
 
@@ -120,12 +119,7 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
     custImg.src = '';
   }
 
-  const cust = customerPicker({
-    onChange: () => updateCustImage()
-  });
-
-  cust.el.addEventListener('change', () => updateCustImage());
-
+  const cust = customerPicker({ onChange: () => updateCustImage() });
   let helmets = null, paySum = 0;
   const vehicle = vehiclePicker({ label: 'Vehicle', onChange: () => paintLast() });
   const handover = segmented([{ value: 'delivery', label: 'We are delivering' }, { value: 'office', label: 'Customer is coming to collect' }], 'delivery', () => paintMode());
@@ -171,7 +165,6 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
   };
   [rent, dep, dch, apc, oa, days].forEach(i => i.addEventListener('input', recalc));
   
-  // Restricted purpose list matching exact delivery categories: Rent, Deposit, Delivery charges, Advance pickup charges, Other charges
   const pay = paymentsEditor({ title: 'Payments received', purposes: ['Rent', 'Deposit', 'Delivery charges', 'Advance pickup charges', 'Other charges'], first: 'Rent', hint: 'Match payment purposes directly to charges (Rent, Deposit, Delivery charges, Advance pickup charges, Other charges). Split lines as needed.',
     onTotal: (t) => { paySum = t; recalc(); } });
   recalc();
