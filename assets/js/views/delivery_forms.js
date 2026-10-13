@@ -104,7 +104,7 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
 
   async function updateCustImage() {
     const c = cust.value();
-    if (c?.customer_image) {
+    if (c && c.customer_image) {
       try {
         const urls = await signedUrls([c.customer_image]);
         const url = urls[c.customer_image];
@@ -113,7 +113,7 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
           custImg.style.display = 'block';
           return;
         }
-      } catch { /* fallback */ }
+      } catch (e) { /* fallback */ }
     }
     custImg.style.display = 'none';
     custImg.src = '';
