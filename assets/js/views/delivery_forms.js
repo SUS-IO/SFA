@@ -122,9 +122,7 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
   const at = input({ type: 'datetime-local', value: localInputValue() });
   const days = wholeInput('1'); const fDays = field('Number of days', days, { required: true });
   
-  // Rent per day calculation update
   const rent = moneyInput(); const fRent = field('Rent per day', rent, { required: true, hint: 'Type rent amount per day. Total rent is calculated automatically as Rent x Days.' });
-  
   const dep = moneyInput(); const fDep = field('Deposit', dep);
   const dch = moneyInput(); const fDch = field('Delivery charges', dch);
   const apc = moneyInput(); const fApc = field('Advance pickup charges', apc);
@@ -135,7 +133,6 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
   const note = textarea({ rows: '2', placeholder: 'Anything to remember' });
   const total = h('div', { class: 'total-box' }); const billEl = h('p', { class: 'bill-line' });
   
-  // Calculated total rent = Rent per day * Number of days
   const totalRent = () => num(rent.value) * (num(days.value) || 1);
   const charged = () => totalRent() + num(dep.value) + num(dch.value) + num(apc.value) + num(oa.value);
   
@@ -148,7 +145,8 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
   };
   [rent, dep, dch, apc, oa, days].forEach(i => i.addEventListener('input', recalc));
   
-  const pay = paymentsEditor({ title: 'Payments received', purposes: ['Rent', 'Deposit', 'Delivery charges'], first: 'Rent', hint: 'The total received must equal the total amount charged. Split it over as many lines as you need. UPI, online, card and bank payments need a receipt photo.',
+  // Explicitly itemized payment purposes matching exact categories (Rent, Deposit, Delivery charges, etc.)
+  const pay = paymentsEditor({ title: 'Payments received', purposes: ['Rent', 'Deposit', 'Delivery charges', 'Advance pickup charges', 'Other'], first: 'Rent', hint: 'Match payment purposes directly to charges (Rent, Deposit, Delivery charges, etc.). Split lines as needed.',
     onTotal: (t) => { paySum = t; recalc(); } });
   recalc();
 
@@ -184,8 +182,6 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
         const folder = `deliveries/${folderId()}`;
         const payments = await pay.collect(`${folder}/receipts`);
         const photo_set = await photos.collect(folder, 'vehicle');
-        
-        // Submit total calculated rent (Rent per day * Days) to the database backend
         const body = { customer_id: cust.value().id, vehicle_id: vehicle.value().id, helmet_ids: helmets ? helmets.values() : [], handover_mode: handover.get(), delivery_place: handover.get() === 'delivery' ? place.value.trim() : '', current_address: addr.value.trim(), delivered_at: isoFromLocal(at.value),
           days: days.value.trim(), rent: String(totalRent()), deposit: dep.value.trim(), delivery_charges: dch.value.trim(), advance_pickup_charges: apc.value.trim(),
           km_limit_per_day: km.value(), extra_km_rate: xrate.value.trim(), odometer_out: odo.value.trim(), other_charges_text: ot.value, other_charges_amount: oa.value.trim(), note: note.value, photo_set, payments };
