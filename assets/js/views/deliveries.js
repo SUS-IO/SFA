@@ -131,7 +131,10 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
     const waiting = entries.filter(m => m.status === 'pending_ack'), disputed = entries.filter(m => m.status === 'disputed');
     const canApproveFor = () => can.approve();
     s.el.querySelector('.sheet-head h2').textContent = d.code; s.el.querySelector('.sheet-head p')?.remove();
-    const sub = h('p', `${x.customer?.name || (d.booking_text || '').split('\n')[0]}${x.vehicle ? `, ${x.vehicle.number}` : ''}`); s.el.querySelector('.sheet-titles').append(sub);
+    
+    // Fixed nested template literal syntax error here:
+    const sub = h('p', (x.customer?.name || (d.booking_text || '').split('\n')[0]) + (x.vehicle ? ', ' + x.vehicle.number : '')); 
+    s.el.querySelector('.sheet-titles').append(sub);
 
     const blockers = [];
     if (waiting.length) blockers.push(`Waiting for ${[...new Set(waiting.map(m => who_(m.cash_user)))].join(' and ')} to acknowledge ${fmtMoney(waiting.reduce((a, m) => a + Number(m.amount), 0))} cash.`);
@@ -206,7 +209,9 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
         kv('Vehicle', x.vehicle ? `${x.vehicle.number}, ${model(x.vehicle.model_id)?.name || ''}` : null), kv('Helmets', x.helmets.length ? h('span', null, x.helmets.map(hh => chip(hh.code + (hh.returned_at ? ', returned' : ''), hh.returned_at ? 'neutral' : 'blue'))) : (['booked', 'booking_pending'].includes(d.status) ? null : 'None')),
         kv('Handed over', d.handover_mode === 'office' ? 'The customer collected it at the Office' : d.handover_mode === 'delivery' ? 'We delivered it to the customer' : null), kv('Delivered', d.delivered_at ? fmtDateTimeY(d.delivered_at) : null), kv(d.handover_mode === 'office' ? 'Collected at' : 'Delivery location', d.delivery_place), kv('Current address', d.current_address), kv('Taken from', loc(d.from_location_id)?.name),
         d.reviewed_at ? kv('Details reviewed by', `${whoName(d.reviewed_by)}, ${fmtDateTimeY(d.reviewed_at)}`) : null,
-        kv('Return due', d.return_due ? fmtDateTimeY(d.return_due) : null), kv('Days', d.days ? `${d.days}${activeExt.length ? ` + ${activeExt.reduce((a, e) => a + e.extra_days, 0)} extended` : ''}` : null),
+        kv('Return due', d.return_due ? fmtDateTimeY(d.return_due) : null), 
+        // Fixed nested template literal syntax error here:
+        kv('Days', d.days ? d.days + (activeExt.length ? ' + ' + activeExt.reduce((a, e) => a + e.extra_days, 0) + ' extended' : '') : null),
         kv('Km limit', d.km_limit_per_day ? `${d.km_limit_per_day} km per day, ${fmtMoney(d.extra_km_rate)} per extra km` : null), kv('Odometer out', d.odometer_out !== null ? `${d.odometer_out} km${d.km_before_current ? ` (after swap; ${d.km_before_current} km used before)` : ''}` : null),
         kv('Added by', `${whoName(d.created_by)}, ${fmtDateTimeY(d.created_at)}`), d.approved_at ? kv('Approved by', `${whoName(d.approved_by)}, ${fmtDateTimeY(d.approved_at)}`) : null,
         d.status === 'cancelled' ? kv('Cancelled', `${d.cancel_reason} (${whoName(d.cancelled_by)})`) : null, kv('Note', d.note))),
