@@ -37,10 +37,6 @@ function kmLimitField() {
     validate() { const v = this.value(); if (!/^\d+$/.test(v) || Number(v) < 100) { f.setError('Choose the km limit, 100 or more.'); return false; } return true; } };
 }
 
-
-// The photo set for one vehicle: odometer + four sides (all required), up to 6 additional photos
-// and, where helmets are involved, up to 6 helmet photos.
-//   opts.helmets: show the helmet block.  Call setHelmetsNeeded(true) once helmets are chosen.
 const SET_SIDES = [['odometer', 'Odometer reading'], ['front', 'Front'], ['back', 'Rear'], ['left', 'Left side'], ['right', 'Right side']];
 function photoSet(title, { helmets = false, hint = 'The odometer photo and all four sides are required.' } = {}) {
   const pf = Object.fromEntries(SET_SIDES.map(([k, l]) => [k, photoField({ label: l, required: true })]));
@@ -75,8 +71,6 @@ function photoSet(title, { helmets = false, hint = 'The odometer photo and all f
 const sidePhotos = (title) => photoSet(title, { helmets: false });
 
 // ---------------------------------------------------------------------------------------------
-// New booking (text only), or a delivery: a walk-in, or the hand-over of an approved booking.
-//   mode: 'deliver' | 'booking';  booking: an approved booking row
 export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
   const isBooking = mode === 'booking';
   const formId = 'dl-form';
@@ -127,7 +121,10 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
   const addr = textarea({ rows: '2', placeholder: 'Where the customer is staying now' }); const fAddr = field('Customer\'s current address', addr, { required: true, hint: 'Customers move often. This is recorded for this delivery.' });
   const at = input({ type: 'datetime-local', value: localInputValue() });
   const days = wholeInput('1'); const fDays = field('Number of days', days, { required: true });
-  const rent = moneyInput(); const fRent = field('Rent (total)', rent, { required: true, hint: 'Type the rent for the whole period.' });
+  
+  // Rent per day calculation update
+  const rent = moneyInput(); const fRent = field('Rent per day', rent, { required: true, hint: 'Type rent amount per day. Total rent is calculated automatically as Rent x Days.' });
+  
   const dep = moneyInput(); const fDep = field('Deposit', dep);
   const dch = moneyInput(); const fDch = field('Delivery charges', dch);
   const apc = moneyInput(); const fApc = field('Advance pickup charges', apc);
@@ -137,15 +134,20 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
   const photos = photoSet('Vehicle photos at handover', { helmets: true });
   const note = textarea({ rows: '2', placeholder: 'Anything to remember' });
   const total = h('div', { class: 'total-box' }); const billEl = h('p', { class: 'bill-line' });
-  const charged = () => num(rent.value) + num(dep.value) + num(dch.value) + num(apc.value) + num(oa.value);
+  
+  // Calculated total rent = Rent per day * Number of days
+  const totalRent = () => num(rent.value) * (num(days.value) || 1);
+  const charged = () => totalRent() + num(dep.value) + num(dch.value) + num(apc.value) + num(oa.value);
+  
   const recalc = () => {
-    const t = num(rent.value) + num(dep.value) + num(dch.value) + num(apc.value);
-    mount(total, h('span', 'Total amount'), h('strong', fmtMoney(t)), h('small', 'Rent + deposit + delivery charges + advance pickup charges'));
+    const t = totalRent() + num(dep.value) + num(dch.value) + num(apc.value);
+    mount(total, h('span', 'Total amount'), h('strong', fmtMoney(t)), h('small', `Rent (${fmtMoney(num(rent.value))} x ${num(days.value) || 1} days) + deposit + delivery charges + advance pickup charges`));
     const diff = charged() - paySum;
     billEl.className = 'bill-line' + (diff === 0 && charged() > 0 ? ' ok' : ' due');
     billEl.textContent = charged() === 0 ? '' : diff === 0 ? `Amount received equals the amount charged (${fmtMoney(charged())}).` : diff > 0 ? `Still to receive: ${fmtMoney(diff)}. The amount received must equal the amount charged (${fmtMoney(charged())}).` : `Received ${fmtMoney(-diff)} too much. The amount received must equal the amount charged (${fmtMoney(charged())}).`;
   };
-  [rent, dep, dch, apc, oa].forEach(i => i.addEventListener('input', recalc));
+  [rent, dep, dch, apc, oa, days].forEach(i => i.addEventListener('input', recalc));
+  
   const pay = paymentsEditor({ title: 'Payments received', purposes: ['Rent', 'Deposit', 'Delivery charges'], first: 'Rent', hint: 'The total received must equal the total amount charged. Split it over as many lines as you need. UPI, online, card and bank payments need a receipt photo.',
     onTotal: (t) => { paySum = t; recalc(); } });
   recalc();
@@ -182,8 +184,10 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
         const folder = `deliveries/${folderId()}`;
         const payments = await pay.collect(`${folder}/receipts`);
         const photo_set = await photos.collect(folder, 'vehicle');
+        
+        // Submit total calculated rent (Rent per day * Days) to the database backend
         const body = { customer_id: cust.value().id, vehicle_id: vehicle.value().id, helmet_ids: helmets ? helmets.values() : [], handover_mode: handover.get(), delivery_place: handover.get() === 'delivery' ? place.value.trim() : '', current_address: addr.value.trim(), delivered_at: isoFromLocal(at.value),
-          days: days.value.trim(), rent: rent.value.trim(), deposit: dep.value.trim(), delivery_charges: dch.value.trim(), advance_pickup_charges: apc.value.trim(),
+          days: days.value.trim(), rent: String(totalRent()), deposit: dep.value.trim(), delivery_charges: dch.value.trim(), advance_pickup_charges: apc.value.trim(),
           km_limit_per_day: km.value(), extra_km_rate: xrate.value.trim(), odometer_out: odo.value.trim(), other_charges_text: ot.value, other_charges_amount: oa.value.trim(), note: note.value, photo_set, payments };
         let id;
         if (booking) { await rpc('deliver_booking', { p_id: booking.id, p: body }); id = booking.id; }
@@ -199,7 +203,6 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Extension: pick the new end date, type the flat amount. Payment may come later.
 export function openExtendForm({ delivery, onDone }) {
   const due = new Date(delivery.return_due);
   const end = input({ type: 'datetime-local', value: localInputValue(new Date(due.getTime() + 86400000)) });
@@ -314,10 +317,6 @@ export function openPickupForm({ delivery, rentalDays, helmetsOut, onDone }) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// A single payment: on a delivery, or on its own.   opts: { delivery?: row, preset?: { type, purpose, amount }, onDone }
-// Which kind of entry is allowed depends on where the delivery is (the database enforces the same):
-//   booking, delivery waiting for approval, delivery out with the customer, extension: income only
-//   pickup waiting or closed: income and expense      cancelled: expense only (a refund)
 const TYPES_BY_STATUS = { booking_pending: ['Income'], booked: ['Income'], pending: ['Income'], active: ['Income'], pickup_pending: ['Income', 'Expense'], closed: ['Income', 'Expense'], cancelled: ['Expense'] };
 export const moneyTypesFor = (status) => TYPES_BY_STATUS[status] || ['Income', 'Expense'];
 const TYPE_NOTE = {
