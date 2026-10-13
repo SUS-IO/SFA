@@ -145,8 +145,8 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
   };
   [rent, dep, dch, apc, oa, days].forEach(i => i.addEventListener('input', recalc));
   
-  // Explicit itemized payment purposes matching exact delivery categories including Other
-  const pay = paymentsEditor({ title: 'Payments received', purposes: ['Rent', 'Deposit', 'Delivery charges', 'Advance pickup charges', 'Other'], first: 'Rent', hint: 'Match payment purposes directly to charges (Rent, Deposit, Delivery charges, Advance pickup charges, Other). Split lines as needed.',
+  // Restricted purpose list matching exact delivery categories: Rent, Deposit, Delivery charges, Advance pickup charges, Other charges
+  const pay = paymentsEditor({ title: 'Payments received', purposes: ['Rent', 'Deposit', 'Delivery charges', 'Advance pickup charges', 'Other charges'], first: 'Rent', hint: 'Match payment purposes directly to charges (Rent, Deposit, Delivery charges, Advance pickup charges, Other charges). Split lines as needed.',
     onTotal: (t) => { paySum = t; recalc(); } });
   recalc();
 
@@ -320,8 +320,8 @@ const TYPE_NOTE = {
   pending: 'While the delivery waits for approval only money received can be added.', active: 'While the vehicle is out with the customer only money received can be added. Refunds can be added from the pickup onwards.',
   cancelled: 'This record is cancelled, so money can only be paid back (an expense).',
 };
-const INCOME_FOR = ['Rent', 'Extension', 'Balance', 'Deposit', 'Other'];
-const EXPENSE_FOR = ['Refundable Deposit', 'Fuel', 'Repair', 'Other'];
+const INCOME_FOR = ['Rent', 'Extension', 'Balance', 'Deposit', 'Other charges'];
+const EXPENSE_FOR = ['Refundable Deposit', 'Fuel', 'Repair', 'Other charges'];
 export function openMoneyForm({ delivery = null, preset = null, onDone }) {
   const ctx = { status: delivery?.status || null };
   const type = select([{ value: 'Income', label: 'Income (money received)' }, { value: 'Expense', label: 'Expense (money paid out)' }]);
