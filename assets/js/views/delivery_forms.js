@@ -137,16 +137,16 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
   const charged = () => totalRent() + num(dep.value) + num(dch.value) + num(apc.value) + num(oa.value);
   
   const recalc = () => {
-    const t = totalRent() + num(dep.value) + num(dch.value) + num(apc.value);
-    mount(total, h('span', 'Total amount'), h('strong', fmtMoney(t)), h('small', `Rent (${fmtMoney(num(rent.value))} x ${num(days.value) || 1} days) + deposit + delivery charges + advance pickup charges`));
+    const t = totalRent() + num(dep.value) + num(dch.value) + num(apc.value) + num(oa.value);
+    mount(total, h('span', 'Total amount'), h('strong', fmtMoney(t)), h('small', `Rent (${fmtMoney(num(rent.value))} x ${num(days.value) || 1} days) + deposit + delivery charges + advance pickup charges + other charges`));
     const diff = charged() - paySum;
     billEl.className = 'bill-line' + (diff === 0 && charged() > 0 ? ' ok' : ' due');
     billEl.textContent = charged() === 0 ? '' : diff === 0 ? `Amount received equals the amount charged (${fmtMoney(charged())}).` : diff > 0 ? `Still to receive: ${fmtMoney(diff)}. The amount received must equal the amount charged (${fmtMoney(charged())}).` : `Received ${fmtMoney(-diff)} too much. The amount received must equal the amount charged (${fmtMoney(charged())}).`;
   };
   [rent, dep, dch, apc, oa, days].forEach(i => i.addEventListener('input', recalc));
   
-  // Explicitly itemized payment purposes matching exact categories (Rent, Deposit, Delivery charges, etc.)
-  const pay = paymentsEditor({ title: 'Payments received', purposes: ['Rent', 'Deposit', 'Delivery charges', 'Advance pickup charges', 'Other'], first: 'Rent', hint: 'Match payment purposes directly to charges (Rent, Deposit, Delivery charges, etc.). Split lines as needed.',
+  // Explicit itemized payment purposes matching exact delivery categories including Other
+  const pay = paymentsEditor({ title: 'Payments received', purposes: ['Rent', 'Deposit', 'Delivery charges', 'Advance pickup charges', 'Other'], first: 'Rent', hint: 'Match payment purposes directly to charges (Rent, Deposit, Delivery charges, Advance pickup charges, Other). Split lines as needed.',
     onTotal: (t) => { paySum = t; recalc(); } });
   recalc();
 
