@@ -1,203 +1,84 @@
-// Pickers for Customer, Vehicle, and Helmets
-import { h, icon, btn, field, input, openSheet, toast, mount, emptyState, skeletonRows, debounce, fmtPhone } from './ui.js';
-import { sb } from './supa.js';
-import { signedUrls } from './images.js';
+// Pick a customer, a ready vehicle, ready helmets.
+import { h, icon, btn, field, input, select, mount, debounce, fmtPhone, chip, statusBadge } from './ui.js';
+import { sb, fetchAll } from './supa.js';
+import { state, availability, placeOf, model, loc } from './store.js';
 
-export function customerPicker({ value = null, onChange, hint = 'Search by name or mobile. If the customer is not there yet, create them now.' } = {}) {
-  let selected = value;
-  const host = h('div', { class: 'cust-picker' });
-
-  function render() {
-    host.replaceChildren(); // Clear previous contents cleanly
-
-    if (!selected) {
-      const chooseBtn = btn('Choose customer from Customer Master', {
-        ic: 'search',
-        onClick: openSearch
-      });
-      mount(host, field('Customer from the Customer Master', chooseBtn, { required: true, hint }));
-      return;
-    }
-
-    // Customer Card with Photo Preview
-    const imgEl = h('img', {
-      style: 'width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: #e2e8f0; flex-shrink: 0;',
-      alt: selected.name
+// Search customers in the Customer Master by name or mobile. Blocked customers are not listed.
+// A customer who is still waiting for approval can be chosen, but the delivery cannot be confirmed until they are approved.
+export function customerPicker({ fixed = null, allowNew = true } = {}) {
+  let picked = fixed;
+  const shown = h('div', { class: 'picked' });
+  const results = h('div', { class: 'pick-results', role: 'listbox' });
+  const q = input({ type: 'search', placeholder: 'Type a name or mobile number', 'aria-label': 'Search customers' });
+  const newBtn = allowNew && !fixed ? btn('Create new customer', { ic: 'plus', small: true, onClick: async () => {
+    const { openNewCustomer } = await import('../views/customers.js');
+    openNewCustomer(async (id) => {
+      const { data } = await sb.from('customers').select('id,name,mobile,status,customer_type').eq('id', id).maybeSingle();
+      if (data) { picked = data; f.setError(''); paint(); }
     });
-
-    const info = h('div', { style: 'flex: 1; min-width: 0;' },
-      h('strong', { style: 'display: block;' }, selected.name),
-      h('small', { class: 'muted' }, fmtPhone(selected.mobile))
-    );
-
-    const changeBtn = btn('Change', {
-      kind: 'ghost',
-      small: true,
-      onClick: openSearch
-    });
-
-    const card = h('div', { 
-      style: 'display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; background: var(--bg-subtle, #f1f5f9); border: 1px solid var(--border-color, #cbd5e1);' 
-    }, imgEl, info, changeBtn);
-
-    // Load customer photo if available
-    if (selected.customer_image) {
-      signedUrls([selected.customer_image]).then(map => {
-        if (map[selected.customer_image]) imgEl.src = map[selected.customer_image];
-      }).catch(() => {});
-    } else {
-      imgEl.style.display = 'none';
-      const iconAvatar = h('div', { style: 'width: 48px; height: 48px; border-radius: 50%; background: #cbd5e1; display: flex; align-items: center; justify-content: center; flex-shrink: 0;' }, icon('user', 24));
-      card.prepend(iconAvatar);
-    }
-
-    mount(host, field('Customer from the Customer Master', card, { required: true, hint }));
-  }
-
-  function openSearch() {
-    let listWrap = h('div', { class: 'rows' });
-    const qInput = input({ placeholder: 'Search by name or mobile', type: 'search' });
-
-    const sheet = openSheet({
-      title: 'Choose customer',
-      body: h('div', { class: 'stack' },
-        h('div', { class: 'search' }, icon('search', 18), qInput),
-        listWrap
-      )
-    });
-
-    async function search() {
-      const q = qInput.value.trim();
-      mount(listWrap, skeletonRows(4));
-      try {
-        let query = sb.from('customers').select('id,name,mobile,customer_type,nationality,status,customer_image').order('name');
-        if (q) {
-          const digits = q.replace(/[\s()-]/g, '');
-          if (/^\+?\d+$/.test(digits)) query = query.ilike('mobile', `%${digits}%`);
-          else query = query.ilike('name', `%${q}%`);
-        }
-        const { data, error } = await query.limit(30);
-        if (error) throw error;
-
-        if (!data.length) {
-          mount(listWrap, emptyState('No customers found', 'Try another search term.'));
-          return;
-        }
-
-        const paths = data.map(c => c.customer_image).filter(Boolean);
-        const urlMap = paths.length ? await signedUrls(paths).catch(() => ({})) : {};
-
-        mount(listWrap, data.map(c => {
-          const avatar = h('div', { style: 'width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center;' });
-          if (c.customer_image && urlMap[c.customer_image]) {
-            avatar.append(h('img', { src: urlMap[c.customer_image], style: 'width:100%; height:100%; object-fit:cover;' }));
-          } else {
-            avatar.append(icon('user', 20));
-          }
-
-          return h('div', {
-            class: 'row clickable',
-            style: 'display: flex; align-items: center; gap: 12px; padding: 10px; cursor: pointer;',
-            on: {
-              click: () => {
-                selected = c;
-                render();
-                onChange?.(selected);
-                sheet.close();
-              }
-            }
-          },
-          avatar,
-          h('div', { style: 'flex: 1;' }, h('strong', c.name), h('br'), h('small', { class: 'muted' }, fmtPhone(c.mobile)))
-          );
-        }));
-      } catch (e) {
-        mount(listWrap, h('p', { class: 'field-error' }, 'Could not load customers.'));
-      }
-    }
-
-    qInput.addEventListener('input', debounce(search, 300));
-    search();
-  }
-
-  render();
-
-  return {
-    el: host,
-    value: () => selected,
-    setError(msg) {
-      const f = host.querySelector('.field');
-      if (f && f.setError) f.setError(msg);
-    }
+  } }) : null;
+  const f = field('Customer from the Customer Master', h('div', { class: 'pick' }, q, results, shown, newBtn), { required: true, hint: 'Search by name or mobile. If the customer is not there yet, create them now.' });
+  const paint = () => {
+    if (picked) {
+      mount(shown, h('div', { class: 'picked-card' }, h('div', h('strong', picked.name), h('small', fmtPhone(picked.mobile))),
+        picked.status === 'pending' ? chip('Waiting for approval', 'pink') : null,
+        fixed ? null : h('button', { type: 'button', class: 'btn btn-ghost btn-sm', on: { click: () => { picked = null; q.hidden = false; q.value = ''; paint(); q.focus(); } } }, 'Change')));
+      q.hidden = true; mount(results); if (newBtn) newBtn.hidden = true;
+    } else { mount(shown); q.hidden = false; if (newBtn) newBtn.hidden = false; }
   };
+  const search = debounce(async () => {
+    const term = q.value.replace(/[,()%*\\]/g, ' ').trim();
+    if (term.length < 2) return mount(results);
+    const digits = term.replace(/[\s()-]/g, '');
+    let qq = sb.from('customers').select('id,name,mobile,status,customer_type').in('status', ['active', 'pending']).order('name').limit(8);
+    qq = /^\+?\d{3,}$/.test(digits) ? qq.ilike('mobile', `%${digits}%`) : qq.ilike('name', `%${term}%`);
+    const { data, error } = await qq;
+    if (error) return mount(results, h('p', { class: 'muted small' }, 'Could not search. Try again.'));
+    mount(results, data.length ? data.map(c => h('button', { type: 'button', class: 'pick-row', role: 'option', on: { click: () => { picked = c; f.setError(''); paint(); } } },
+      h('strong', c.name), h('small', fmtPhone(c.mobile)), c.customer_type === 'foreign' ? chip('Foreign', 'aqua') : null, c.status === 'pending' ? chip('Waiting for approval', 'pink') : null))
+      : h('p', { class: 'muted small' }, 'No customer found. Use "Create new customer" below to add them to the Customer Master.'));
+  }, 250);
+  q.addEventListener('input', search); paint();
+  return { el: f, value: () => picked, setError: (m) => f.setError(m) };
 }
 
-export function vehiclePicker({ label = 'Vehicle', value = null, excludeId = null, onChange } = {}) {
-  let selected = value;
-  const sel = select([]);
+// A drop-down of vehicles that can be used right now (active and at an Office).
+export function vehiclePicker({ label = 'Vehicle', excludeId = null, onChange = null } = {}) {
+  const sel = select([{ value: '', label: 'Loading vehicles…' }]);
   const f = field(label, sel, { required: true, hint: 'Only active vehicles at an Office are listed.' });
-
-  let vehicles = [];
-  async function load() {
+  let list = [];
+  (async () => {
     try {
-      const { data, error } = await sb.from('vehicles').select('id,number,model_id,current_location_id,status').eq('status', 'active');
-      if (error) throw error;
-      vehicles = (data || []).filter(v => v.id !== excludeId);
-      sel.replaceChildren(
-        h('option', { value: '' }, 'Choose a vehicle'),
-        ...vehicles.map(v => h('option', { value: String(v.id) }, `${v.number}`))
-      );
-      if (selected) sel.value = String(selected.id || selected);
-    } catch {
-      f.setError('Could not load vehicles.');
-    }
-  }
+      list = (await fetchAll(() => sb.from('vehicles').select('*').order('number'))).filter(v => v.id !== excludeId && availability(v).ok);
+      sel.replaceChildren(...[{ value: '', label: list.length ? 'Choose a vehicle' : 'No vehicle is ready at an Office' },
+        ...list.map(v => ({ value: String(v.id), label: `${v.number}, ${model(v.model_id)?.name || ''}, ${loc(v.current_location_id)?.name || ''}` }))]
+        .map(o => h('option', { value: o.value }, o.label)));
+    } catch { sel.replaceChildren(h('option', { value: '' }, 'Could not load vehicles')); }
+  })();
+  const value = () => (sel.value ? list.find(v => String(v.id) === sel.value) : null);
+  sel.addEventListener('change', () => { f.setError(''); onChange?.(value()); });
+  return { el: f, value, setError: (m) => f.setError(m) };
+}
 
-  sel.addEventListener('change', () => {
-    f.setError('');
-    const id = Number(sel.value);
-    selected = vehicles.find(v => v.id === id) || null;
-    onChange?.(selected);
-  });
-
-  load();
-
-  return {
-    el: f,
-    value: () => selected,
-    setError(msg) { f.setError(msg); }
+// Tick-boxes for helmets.  items: [{ id, code, where }]
+export function helmetChips({ label = 'Helmets', items, checked = [], hint = '' }) {
+  const ids = new Set(checked);
+  const filter = input({ type: 'search', placeholder: 'Find a helmet', 'aria-label': 'Find a helmet' });
+  const grid = h('div', { class: 'helmet-grid', role: 'group', 'aria-label': label });
+  const count = h('span', { class: 'photo-size' });
+  const paint = () => {
+    const t = filter.value.trim().toLowerCase();
+    mount(grid, items.filter(i => !t || i.code.toLowerCase().includes(t) || ids.has(i.id)).map(i =>
+      h('button', { type: 'button', class: 'hchip', 'aria-pressed': String(ids.has(i.id)), title: i.where || '', on: { click: () => { ids.has(i.id) ? ids.delete(i.id) : ids.add(i.id); paint(); } } },
+        icon(ids.has(i.id) ? 'check' : 'helmet', 14), i.code)));
+    if (!items.length) mount(grid, h('p', { class: 'muted small' }, 'No helmet is ready at an Office.'));
+    count.textContent = `${ids.size} chosen`;
   };
+  filter.addEventListener('input', paint); paint();
+  return { el: h('div', { class: 'stack-sm' }, h('div', { class: 'photo-head' }, h('span', { class: 'field-label' }, label), count), items.length > 12 ? filter : null, grid, hint ? h('span', { class: 'field-hint' }, hint) : null), values: () => [...ids] };
 }
 
 export async function readyHelmets() {
-  const { data } = await sb.from('helmets').select('id,code,status').eq('status', 'ready');
-  return data || [];
-}
-
-export function helmetChips({ label = 'Helmets', items = [], checked = [], hint = '' } = {}) {
-  const set = new Set(checked);
-  const count = h('span', { class: 'muted small' }, `${set.size} chosen`);
-  const list = h('div', { class: 'chips-grid' });
-
-  items.forEach(item => {
-    const active = set.has(item.id);
-    const btnEl = btn(item.code, {
-      kind: active ? 'primary' : 'outline',
-      small: true,
-      onClick: () => {
-        if (set.has(item.id)) set.delete(item.id);
-        else set.add(item.id);
-        btnEl.className = set.has(item.id) ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
-        count.textContent = `${set.size} chosen`;
-      }
-    });
-    list.append(btnEl);
-  });
-
-  const el = field(label, h('div', { class: 'stack-sm' }, list), { hint, rightLabel: count });
-
-  return {
-    el,
-    values: () => [...set]
-  };
+  const all = await fetchAll(() => sb.from('helmets').select('*').order('code'));
+  return all.filter(x => availability(x).ok).map(x => ({ id: x.id, code: x.code, where: loc(x.current_location_id)?.name || '' }));
 }
