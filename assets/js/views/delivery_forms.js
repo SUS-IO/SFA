@@ -4,7 +4,7 @@ import { rpc, sb, fetchAll } from '../core/supa.js';
 import { state, activeLocations, whoName, loc } from '../core/store.js';
 import { paymentsEditor, userOptions, VIAS } from '../core/payments.js';
 import { customerPicker, vehiclePicker, helmetChips, readyHelmets } from '../core/pickers.js';
-import { multiPhotoField, photoField, photoPath, uploadPhoto } from '../core/images.js';
+import { multiPhotoField, photoField, photoPath, uploadPhoto, signedUrls } from '../core/images.js';
 
 const MONEY = /^\d+(\.\d{1,2})?$/;
 const KM_LIMITS = [100, 150, 200, 250, 300, 400, 500];
@@ -99,7 +99,33 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
     return s;
   }
 
-  const cust = customerPicker({});
+  // Customer photo preview element
+  const custImg = h('img', { style: 'width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin-top: 6px; display: none;' });
+  const custImgWrap = h('div', { class: 'field' }, custImg);
+
+  async function updateCustImage() {
+    const c = cust.value();
+    if (c?.customer_image) {
+      try {
+        const urls = await signedUrls([c.customer_image]);
+        const url = urls[c.customer_image];
+        if (url) {
+          custImg.src = url;
+          custImg.style.display = 'block';
+          return;
+        }
+      } catch { /* fallback */ }
+    }
+    custImg.style.display = 'none';
+    custImg.src = '';
+  }
+
+  const cust = customerPicker({
+    onChange: () => updateCustImage()
+  });
+
+  cust.el.addEventListener('change', () => updateCustImage());
+
   let helmets = null, paySum = 0;
   const vehicle = vehiclePicker({ label: 'Vehicle', onChange: () => paintLast() });
   const handover = segmented([{ value: 'delivery', label: 'We are delivering' }, { value: 'office', label: 'Customer is coming to collect' }], 'delivery', () => paintMode());
@@ -152,7 +178,7 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, onDone }) {
 
   const secs = [];
   if (booking) secs.push(h('div', { class: 'callout' }, icon('info', 18), h('span', null, h('strong', `Booking ${booking.code}: `), h('span', { class: 'prewrap' }, booking.booking_text || ''))));
-  secs.push(cust.el, vehicle.el, sectionBlock('Helmets', h('div', { id: 'helmet-slot' }, h('p', { class: 'muted small' }, 'Loading helmets…'))),
+  secs.push(cust.el, custImgWrap, vehicle.el, sectionBlock('Helmets', h('div', { id: 'helmet-slot' }, h('p', { class: 'muted small' }, 'Loading helmets…'))),
     sectionBlock('Handover', h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'How is the vehicle handed over?'), handover), fPlace, lastLoc, fAddr, h('div', { class: 'grid-2' }, field('Handover time', at), fDays)),
     sectionBlock('Charges', h('div', { class: 'grid-2' }, fRent, fDep), h('div', { class: 'grid-2' }, fDch, fApc), total,
       h('div', { class: 'grid-2' }, field('Other charge for', ot), fOa)),
