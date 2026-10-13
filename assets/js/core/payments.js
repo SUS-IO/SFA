@@ -12,8 +12,25 @@ export function userOptions({ blank = false } = {}) {
 }
 
 function line({ purpose, suggestions, onChange, onRemove, amount: startAmount = '', lockPurpose = false }) {
-  const dl = h('datalist', { id: 'pl-' + Math.random().toString(36).slice(2, 7) }, suggestions.map(s => h('option', { value: s })));
-  const fPurpose = field('For', input({ value: purpose, list: lockPurpose ? undefined : dl.id, placeholder: 'For example Rent', readonly: lockPurpose ? 'readonly' : undefined }), { required: true });
+  // Use a strict dropdown select instead of a text input with a datalist
+  const purposeSelect = select(suggestions.map(s => ({ value: s, label: s })), { value: purpose || suggestions[0] });
+  if (lockPurpose) purposeSelect.disabled = true;
+  const fPurpose = field('For', purposeSelect, { required: true });
+
+  // Additional detail input box that appears only when "Other charges" is selected
+  const otherDetailInput = input({ placeholder: 'Specify details (e.g. Helmet damage cover)' });
+  const fOtherDetail = field('Other charges detail', otherDetailInput, { required: true });
+  fOtherDetail.hidden = purposeSelect.value !== 'Other charges';
+
+  purposeSelect.addEventListener('change', () => {
+    fOtherDetail.hidden = purposeSelect.value !== 'Other charges';
+    if (purposeSelect.value !== 'Other charges') {
+      otherDetailInput.value = '';
+      fOtherDetail.setError('');
+    }
+    onChange?.();
+  });
+
   const amount = input({ inputmode: 'decimal', placeholder: '0', value: startAmount === '' ? '' : String(startAmount) });
   const fAmount = field('Amount', amount, { required: true });
   const via = select(VIAS.map(v => ({ value: v, label: v })), { 'aria-label': 'Paid by' });
@@ -26,9 +43,13 @@ function line({ purpose, suggestions, onChange, onRemove, amount: startAmount = 
   const sum = h('summary', 'Add a receipt photo (optional)');
   const rcptErr = h('p', { class: 'field-error', hidden: true, role: 'alert' });
   const det = h('details', { class: 'receipt-det' }, sum, photo.el, rcptErr);
-  const el = h('div', { class: 'pay-line' }, dl,
-    h('div', { class: 'grid-2' }, fPurpose, fAmount), h('div', { class: 'grid-2' }, fVia, fHolder), fNote, det,
+  
+  const el = h('div', { class: 'pay-line' },
+    h('div', { class: 'grid-2' }, fPurpose, fAmount),
+    fOtherDetail, // Renders directly under For/Amount when "Other charges" is active
+    h('div', { class: 'grid-2' }, fVia, fHolder), fNote, det,
     onRemove ? h('button', { type: 'button', class: 'btn btn-ghost btn-sm pay-x', on: { click: onRemove } }, icon('x', 16), h('span', 'Remove this line')) : null);
+
   const sync = () => {
     const cash = via.value === 'Cash'; fHolder.hidden = !cash; fNote.hidden = cash;
     sum.textContent = cash ? 'Add a receipt photo (optional)' : 'Receipt photo (required for this payment)';
@@ -38,11 +59,13 @@ function line({ purpose, suggestions, onChange, onRemove, amount: startAmount = 
   via.addEventListener('change', sync); amount.addEventListener('input', () => { if (fAmount.classList.contains('has-error')) fAmount.setError(''); onChange?.(); });
   holder.addEventListener('change', () => { fHolder.setError(''); onChange?.(); });
   sync();
+
   return {
     el, amount: () => num(amount.value), isBlank: () => amount.value.trim() === '',
     validate() {
-      let ok = true; [fPurpose, fAmount, fHolder].forEach(f => f.setError(''));
-      if (!purposeVal().trim()) { fPurpose.setError('Say what this is for.'); ok = false; }
+      let ok = true; [fPurpose, fAmount, fHolder, fOtherDetail].forEach(f => f.setError(''));
+      if (!purposeSelect.value) { fPurpose.setError('Choose what this is for.'); ok = false; }
+      if (purposeSelect.value === 'Other charges' && !otherDetailInput.value.trim()) { fOtherDetail.setError('Specify details for other charges.'); ok = false; }
       if (!MONEY_RE.test(amount.value.trim().replace(/,/g, '')) || num(amount.value) <= 0) { fAmount.setError('Enter an amount above zero.'); ok = false; }
       if (via.value === 'Cash' && !holder.value) { fHolder.setError('Choose who holds the cash.'); ok = false; }
       rcptErr.hidden = true;
@@ -52,11 +75,15 @@ function line({ purpose, suggestions, onChange, onRemove, amount: startAmount = 
     async collect(folder) {
       let receipt = null; const p = photo.picked();
       if (p) receipt = await uploadPhoto(photoPath(folder, 'receipt', p.type), p.blob);
-      return { purpose: purposeVal().trim(), amount: String(num(amount.value)), via: via.value, cash_user: via.value === 'Cash' ? holder.value : null, receipt, via_note: via.value === 'Cash' ? null : (viaNote.value.trim() || null) };
+      
+      const finalPurpose = purposeSelect.value === 'Other charges' && otherDetailInput.value.trim()
+        ? `Other charges (${otherDetailInput.value.trim()})`
+        : purposeSelect.value;
+
+      return { purpose: finalPurpose, amount: String(num(amount.value)), via: via.value, cash_user: via.value === 'Cash' ? holder.value : null, receipt, via_note: via.value === 'Cash' ? null : (viaNote.value.trim() || null) };
     },
     via: () => via.value, holder: () => holder.value,
   };
-  function purposeVal() { return fPurpose.querySelector('input').value; }
 }
 
 // opts: { title, purposes: [..suggestions], first: 'Rent', max: 5, onTotal(sum) }
