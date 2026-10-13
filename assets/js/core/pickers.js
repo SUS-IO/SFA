@@ -8,6 +8,8 @@ export function customerPicker({ value = null, onChange, hint = 'Search by name 
   const host = h('div', { class: 'cust-picker' });
 
   function render() {
+    host.replaceChildren(); // Clear previous contents cleanly
+
     if (!selected) {
       const chooseBtn = btn('Choose customer from Customer Master', {
         ic: 'search',
@@ -44,7 +46,6 @@ export function customerPicker({ value = null, onChange, hint = 'Search by name 
         if (map[selected.customer_image]) imgEl.src = map[selected.customer_image];
       }).catch(() => {});
     } else {
-      // Fallback placeholder icon standard element
       imgEl.style.display = 'none';
       const iconAvatar = h('div', { style: 'width: 48px; height: 48px; border-radius: 50%; background: #cbd5e1; display: flex; align-items: center; justify-content: center; flex-shrink: 0;' }, icon('user', 24));
       card.prepend(iconAvatar);
@@ -83,7 +84,6 @@ export function customerPicker({ value = null, onChange, hint = 'Search by name 
           return;
         }
 
-        // Fetch thumbnail signed URLs for search result list
         const paths = data.map(c => c.customer_image).filter(Boolean);
         const urlMap = paths.length ? await signedUrls(paths).catch(() => ({})) : {};
 
