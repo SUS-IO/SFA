@@ -4,13 +4,13 @@
   src: url('../fonts/plus-jakarta-sans-latin-wght-normal.woff2') format('woff2-variations'), url('../fonts/plus-jakarta-sans-latin-wght-normal.woff2') format('woff2');
 }
 :root {
-  --navy: #102A43; --blue: #1565C0; --pink: #F26A8D; --mist: #F4F7FB; --aqua: #CBEEF3;
-  --blue-600: #0F4FA0; --blue-50: #E6F0FB; --pink-50: #FDE8EE; --pink-ink: #B3234F; --aqua-600: #7FD3DF;
+  --navy: #211B45; --blue: #4F46E5; --pink: #A855F7; --mist: #F7F6FC; --aqua: #E9D5FF;
+  --blue-600: #3730A3; --blue-50: #EEF2FF; --pink-50: #F3E8FF; --pink-ink: #6D28D9; --aqua-600: #C4B5FD;
   --green: #1B8A5A; --green-50: #DDF3E8; --green-ink: #0C5A39;
-  --ink: var(--navy); --ink-2: #52667A; --line: #DCE5EF; --line-2: #C3D0DF; --surface: #fff; --wash: #EBF1F8;
+  --ink: var(--navy); --ink-2: #625D7A; --line: #E5E1F0; --line-2: #CEC8E3; --surface: #fff; --wash: #F0EDFA;
   --r-sm: 10px; --r-md: 14px; --r-lg: 20px;
-  --shadow: 0 1px 2px rgba(16,42,67,.06), 0 10px 28px -14px rgba(16,42,67,.22);
-  --shadow-lg: 0 24px 60px -20px rgba(16,42,67,.45);
+  --shadow: 0 1px 2px rgba(33,27,69,.06), 0 10px 28px -14px rgba(55,48,163,.22);
+  --shadow-lg: 0 24px 60px -20px rgba(33,27,69,.45);
   --side-w: 248px; --tab-h: 64px;
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 15px; line-height: 1.5; color: var(--ink); background: var(--mist);
