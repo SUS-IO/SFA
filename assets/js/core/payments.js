@@ -1,7 +1,7 @@
 // Payment lines: purpose, amount, how it was paid, who holds the cash, optional receipt photo.
-import { h, icon, btn, field, input, select, fmtMoney, num, toast, fmtDateTime, moneyChip, signed, acknowledgeMoney, disputeMoney, voidMoney, approveMoney } from './ui.js';
-import { state, whoName, can } from './store.js';
-import { photoField, photoPath, uploadPhoto, signedUrls, lightbox } from './images.js';
+import { h, icon, btn, field, input, select, fmtMoney, num, toast } from './ui.js';
+import { state, whoName } from './store.js';
+import { photoField, photoPath, uploadPhoto } from './images.js';
 
 export const VIAS = ['Cash', 'UPI', 'Online', 'Card', 'Bank Transfer', 'Cheque'];
 const MONEY_RE = /^\d+(\.\d{1,2})?$/;
@@ -12,10 +12,12 @@ export function userOptions({ blank = false } = {}) {
 }
 
 function line({ purpose, suggestions, onChange, onRemove, amount: startAmount = '', lockPurpose = false }) {
+  // Use a strict dropdown select instead of a text input with a datalist
   const purposeSelect = select(suggestions.map(s => ({ value: s, label: s })), { value: purpose || suggestions[0] });
   if (lockPurpose) purposeSelect.disabled = true;
   const fPurpose = field('For', purposeSelect, { required: true });
 
+  // Additional detail input box that appears only when "Other charges" is selected
   const otherDetailInput = input({ placeholder: 'Specify details (e.g. Helmet damage cover)' });
   const fOtherDetail = field('Other charges detail', otherDetailInput, { required: true });
   fOtherDetail.hidden = purposeSelect.value !== 'Other charges';
@@ -44,7 +46,7 @@ function line({ purpose, suggestions, onChange, onRemove, amount: startAmount = 
   
   const el = h('div', { class: 'pay-line' },
     h('div', { class: 'grid-2' }, fPurpose, fAmount),
-    fOtherDetail,
+    fOtherDetail, // Renders directly under For/Amount when "Other charges" is active
     h('div', { class: 'grid-2' }, fVia, fHolder), fNote, det,
     onRemove ? h('button', { type: 'button', class: 'btn btn-ghost btn-sm pay-x', on: { click: onRemove } }, icon('x', 16), h('span', 'Remove this line')) : null);
 
@@ -55,7 +57,7 @@ function line({ purpose, suggestions, onChange, onRemove, amount: startAmount = 
     onChange?.();
   };
   via.addEventListener('change', sync); amount.addEventListener('input', () => { if (fAmount.classList.contains('has-error')) fAmount.setError(''); onChange?.(); });
-  holder.addEventListener('change', () => { fHolder.setError(''); });
+  holder.addEventListener('change', () => { fHolder.setError(''); onChange?.(); });
   sync();
 
   return {
@@ -84,6 +86,7 @@ function line({ purpose, suggestions, onChange, onRemove, amount: startAmount = 
   };
 }
 
+// opts: { title, purposes: [..suggestions], first: 'Rent', max: 5, onTotal(sum) }
 export function paymentsEditor({ title = 'Payments received', purposes = ['Rent', 'Deposit'], first = purposes[0], firstAmount = '', max = 100, onTotal, optional = true, hint = null, lockPurpose = false } = {}) {
   const lines = []; const host = h('div', { class: 'pay-lines' });
   const sumEl = h('p', { class: 'pay-sum' });
@@ -109,53 +112,4 @@ export function paymentsEditor({ title = 'Payments received', purposes = ['Rent'
     validate() { let ok = true; for (const l of lines) { if (l.isBlank()) continue; if (!l.validate()) ok = false; } return ok; },
     async collect(folder) { const out = []; for (const l of lines) { if (!l.isBlank()) out.push(await l.collect(folder)); } return out; },
   };
-}
-
-// Helper to hydrate receipt tiles in payment rows
-function hydrateTiles(root, code) {
-  const tiles = [...root.querySelectorAll('.tile[data-path]')]; 
-  const paths = tiles.map(t => t.dataset.path).filter(Boolean);
-  if (!paths.length) return;
-  signedUrls(paths).then(map => tiles.forEach(t => { 
-    const u = map[t.dataset.path]; 
-    if (u && !t.querySelector('img')) { 
-      t.prepend(h('img', { src: u, alt: t.dataset.cap })); 
-      t.style.cursor = 'zoom-in'; 
-      t.addEventListener('click', () => lightbox(u, `${code} ${t.dataset.cap}`)); 
-    } 
-  })).catch(() => {});
-}
-
-const who_ = (id) => state.profileMap.get(id)?.user_name || 'the cash holder';
-
-export function payRow(m, cur, reload) {
-  const me = state.me.id;
-  
-  // Build receipt preview section if a receipt photo exists
-  const receiptView = m.receipt ? h('div', { class: 'swap-photos', style: 'margin-top: 8px;' },
-    h('div', { class: 'photo-multi viewer' }, [
-      h('div', { class: 'tile filled', dataset: { path: m.receipt, cap: `${m.purpose} Receipt` } }, icon('image', 22), h('span', { class: 'thumb-label' }, 'Receipt'))
-    ])
-  ) : null;
-
-  if (receiptView) {
-    queueMicrotask(() => hydrateTiles(receiptView, cur.code));
-  }
-
-  return h('li', { class: `pay-row stacked ${m.status === 'void' ? 'is-void' : ''}` },
-    h('div', { class: 'pay-row-top' },
-      h('div', null, 
-        h('strong', `${m.purpose}`), 
-        h('small', `${m.entry_type}, ${m.via}${m.cash_user ? `, cash held by ${who_(m.cash_user)}` : ''}. Added by ${whoName(m.created_by)} on ${fmtDateTime(m.created_at)}.${m.dispute_reason ? ' Dispute: ' + m.dispute_reason : ''}${m.void_reason ? ' Void: ' + m.void_reason : ''}`)
-      ),
-      h('div', { class: 'pay-act' }, 
-        h('span', { class: `amt ${m.entry_type === 'Expense' ? 'neg' : ''}` }, signed(m)), 
-        moneyChip(m),
-        m.status === 'pending_ack' && m.cash_user === me ? [btn('Acknowledgment', { small: true, kind: 'primary', onClick: () => acknowledgeMoney(m, reload) }), btn('Dispute', { small: true, onClick: () => disputeMoney(m, reload) })] : null,
-        m.status === 'pending' && m.ref_kind === 'delivery' && can.approve() && cur.status !== 'pending' ? btn('Approve', { small: true, kind: 'primary', onClick: () => approveMoney(m, reload) }) : null,
-        m.status !== 'void' && can.manager() ? btn('Void', { small: true, onClick: () => voidMoney(m, reload) }) : null
-      )
-    ),
-    receiptView
-  );
 }
