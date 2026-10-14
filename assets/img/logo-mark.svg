@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <title>SFA Bike logo (placeholder)</title>
-  <rect width="64" height="64" rx="16" fill="#1565C0"/>
-  <circle cx="32" cy="32" r="19" fill="none" stroke="#F4F7FB" stroke-width="5"/>
-  <g stroke="#CBEEF3" stroke-width="2" stroke-linecap="round"><path d="M32 13v12M32 39v12M13 32h12M39 32h12M18.6 18.6l8.5 8.5M36.9 36.9l8.5 8.5M45.4 18.6l-8.5 8.5M27.1 36.9l-8.5 8.5"/></g>
-  <circle cx="32" cy="32" r="5" fill="#F26A8D"/>
-</svg>
