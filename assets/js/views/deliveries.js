@@ -229,14 +229,40 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
   const who_ = (id) => state.profileMap.get(id)?.user_name || 'the cash holder';
   const row = (k, v, cls = '') => h('div', { class: `bill-row ${cls}` }, h('span', k), h('strong', fmtMoney(v)));
 
+  // Find every proof / receipt photo stored on a money record, whatever the column is called.
+  const PROOF_KEY = /receipt|proof|photo|image|attach/i, PATHLIKE = /\/|\.(jpe?g|png|webp|heic|gif|pdf)$/i;
+  function proofPaths(m) {
+    const out = [];
+    const add = (p) => { if (typeof p === 'string' && PATHLIKE.test(p.trim())) out.push(p.trim()); };
+    const walk = (v) => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === 'object') Object.values(v).forEach(walk); else add(v); };
+    for (const [k, v] of Object.entries(m)) if (PROOF_KEY.test(k) && v) walk(v);
+    return [...new Set(out)];
+  }
   function payRow(m, cur) {
-    const me = state.me.id;
-    return h('li', { class: `pay-row ${m.status === 'void' ? 'is-void' : ''}` },
+    const me = state.me.id; const proofs = proofPaths(m);
+    const kvp = (k, v) => (v ? h('div', { class: 'kv' }, h('dt', k), h('dd', v)) : null);
+    const stamp = (by, at) => (by || at ? `${by ? whoName(by) : ''}${at ? `${by ? ', ' : ''}${fmtDateTimeY(at)}` : ''}` : null);
+    const note = m.reference || m.ref_no || m.txn_ref || m.via_note || m.note;
+    const details = h('div', { class: 'swap-details' },
+      h('dl', { class: 'kvs' },
+        kvp('Purpose', m.purpose), kvp('Type', m.entry_type), kvp('Paid by / mode', m.via), kvp('Amount', fmtMoney(m.amount)),
+        kvp('Cash held by', m.cash_user ? who_(m.cash_user) : null), kvp('Reference / note', note),
+        kvp('Added by', stamp(m.created_by, m.created_at)),
+        kvp('Acknowledged by', stamp(m.acknowledged_by, m.acknowledged_at)),
+        kvp('Approved by', stamp(m.approved_by, m.approved_at)),
+        kvp('Disputed', m.dispute_reason), kvp('Voided', m.void_reason ? `${m.void_reason}${m.voided_by ? ` (${whoName(m.voided_by)})` : ''}` : null)),
+      proofs.length
+        ? h('div', { class: 'swap-photos' }, h('strong', 'Proof attached'), h('div', { class: 'photo-multi viewer' }, proofs.map((path, i) =>
+            h('div', { class: 'tile filled', dataset: { path, cap: `Payment proof ${i + 1}` } }, icon('image', 22), h('span', { class: 'thumb-label' }, `Proof ${i + 1}`)))))
+        : (m.via && m.via !== 'Cash' ? h('p', { class: 'muted small' }, 'No proof photo is attached to this payment.') : null));
+    queueMicrotask(() => hydrateTiles(details, `${cur.code} payment`));
+    return h('li', { class: `pay-row stacked ${m.status === 'void' ? 'is-void' : ''}` }, h('div', { class: 'pay-row-top' },
       h('div', null, h('strong', `${m.purpose}`), h('small', `${m.entry_type}, ${m.via}${m.cash_user ? `, cash held by ${who_(m.cash_user)}` : ''}. Added by ${whoName(m.created_by)} on ${fmtDateTime(m.created_at)}.${m.dispute_reason ? ' Dispute: ' + m.dispute_reason : ''}${m.void_reason ? ' Void: ' + m.void_reason : ''}`)),
       h('div', { class: 'pay-act' }, h('span', { class: `amt ${m.entry_type === 'Expense' ? 'neg' : ''}` }, signed(m)), moneyChip(m),
         m.status === 'pending_ack' && m.cash_user === me ? [btn('Acknowledge', { small: true, kind: 'primary', onClick: () => acknowledgeMoney(m, reload) }), btn('Dispute', { small: true, onClick: () => disputeMoney(m, reload) })] : null,
         m.status === 'pending' && m.ref_kind === 'delivery' && can.approve() && cur.status !== 'pending' ? btn('Approve', { small: true, kind: 'primary', onClick: () => approveMoney(m, reload) }) : null,
-        m.status !== 'void' && can.manager() ? btn('Void', { small: true, onClick: () => voidMoney(m, reload) }) : null));
+        m.status !== 'void' && can.manager() ? btn('Void', { small: true, onClick: () => voidMoney(m, reload) }) : null)),
+      details);
   }
   function swapRow(w, d, x) {
     const me = state.me.id; const label = { assigned: 'Assigned', done: w.reviewed_at ? 'Reviewed, waiting for your confirmation' : 'Done, waiting for review', approved: 'Approved', cancelled: 'Cancelled' }[w.status];
