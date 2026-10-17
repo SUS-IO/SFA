@@ -85,7 +85,8 @@ export async function render(root, params) {
   function paintDetail(s, c) {
     const isOwn = c.created_by === state.me.id;
     const canEdit = c.status === 'pending' ? (isOwn || can.approve()) : can.manager();
-    const canApprove = c.status === 'pending' && can.approve() && (!isOwn || can.superadmin());
+    // Approver, Manager, Admin and Superadmin may approve a customer they created themselves.
+    const canApprove = c.status === 'pending' && can.approve();
     s.panel.querySelector('.sheet-titles h2').textContent = c.name;
     const kv = (k, v) => v ? h('div', { class: 'kv' }, h('dt', k), h('dd', v)) : null;
     const photos = [
@@ -105,8 +106,7 @@ export async function render(root, params) {
       c.approved_by ? `Approved by ${whoName(c.approved_by)} on ${fmtDateTimeY(c.approved_at)}` : null,
       c.status_changed_by ? `${c.status === 'blocked' ? 'Blocked' : 'Last unblocked'} by ${whoName(c.status_changed_by)} on ${fmtDateTimeY(c.status_changed_at)}` : null].filter(Boolean);
 
-    const note = c.status === 'pending' && can.approve() && isOwn && !can.superadmin()
-      ? h('div', { class: 'callout' }, icon('info', 18), h('span', 'You added this customer, so another approver has to approve it.')) : null;
+    const note = null;
 
     mount(s.body,
       h('div', { class: 'detail-top' }, statusBadge(c.status), chip(c.customer_type === 'foreign' ? 'Foreign customer' : 'Indian customer', 'aqua'),
