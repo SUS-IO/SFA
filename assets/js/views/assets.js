@@ -1,9 +1,11 @@
 // One screen for both Vehicles and Helmets: same rules, same logs.
 import { h, icon, btn, busy, chip, statusBadge, field, input, textarea, select, segmented, openSheet, confirmDialog, toast, mount,
-  emptyState, skeletonRows, debounce, fmtDateTime, fmtDateTimeY, friendlyError } from '../core/ui.js';
+  emptyState, skeletonRows, debounce, fmtDateTime, fmtDateTimeY, fmtMoney, friendlyError } from '../core/ui.js';
 import { sb, fetchAll, rpc } from '../core/supa.js';
-import { state, can, loc, model, placeOf, availability, whoName, activeLocations } from '../core/store.js';
+import { state, can, loc, model, placeOf, availability, whoName, activeLocations, loadRefs } from '../core/store.js';
 import { parseCodes, parseVehicleLines } from '../core/codes.js';
+import { DEFAULT_TYPES, SLABS, fmtDay, insuranceState, parseVehicleSheet, parseHelmetSheet } from '../core/masters.js';
+import { docField, openDoc } from '../core/docs.js';
 
 const KINDS = {
   vehicles: { table: 'vehicles', logs: 'vehicle_logs', fk: 'vehicle_id', noun: 'vehicle', codeKey: 'number', codeLabel: 'Vehicle number', hasModel: true, ic: 'bike' },
@@ -11,6 +13,9 @@ const KINDS = {
 };
 const PLACE_CHIP = { office: ['blue', 'pin'], service: ['pink', 'pin'], customer: ['navy', 'users'], transit: ['aqua', 'move'], waiting: ['pink', 'clock'], unknown: ['neutral', 'pin'] };
 export const placeChip = (it) => { const p = placeOf(it); const [k, ic] = PLACE_CHIP[p.kind]; return chip(p.label, k, ic); };
+
+const insChip = (it) => { if (it.insurance_end === undefined) return null; const s = insuranceState(it.insurance_end);
+  return s.kind === 'expired' ? chip('Insurance expired', 'pink', 'alert') : s.kind === 'soon' ? chip(`Insurance in ${s.days}d`, 'aqua', 'clock') : null; };
 
 export async function render(kind, root, params) {
   const K = KINDS[kind]; const Noun = K.noun[0].toUpperCase() + K.noun.slice(1);
@@ -50,7 +55,7 @@ export async function render(kind, root, params) {
         h('span', { class: 'cell cell-main' }, h('strong', { class: 'code' }, it[K.codeKey])),
         K.hasModel ? h('span', { class: 'cell' }, model(it.model_id)?.name || '') : null,
         h('span', { class: 'cell' }, placeChip(it)),
-        h('span', { class: 'cell' }, it.status === 'blocked' ? statusBadge('blocked') : availability(it).ok ? statusBadge('active', 'Ready') : h('span', { class: 'muted small' }, 'In use or away')),
+        h('span', { class: 'cell' }, it.status === 'blocked' ? statusBadge('blocked') : availability(it).ok ? statusBadge('active', 'Ready') : h('span', { class: 'muted small' }, 'In use or away'), insChip(it)),
         h('span', { class: 'cell cell-sub' }, it.last_log_at ? fmtDateTime(it.last_log_at) : ''),
         icon('right', 16, 'row-go'))));
   }
@@ -65,7 +70,11 @@ export async function render(kind, root, params) {
   search.addEventListener('input', debounce(() => { st.q = search.value.trim(); paint(); }, 150));
   mount(root,
     h('div', { class: 'page-head' }, h('div', null, h('h1', `${Noun}s`), h('p', { class: 'muted' }, kind === 'vehicles' ? 'Where every vehicle is, and who moved it last.' : 'Only helmets at an office can go out with a delivery.')),
-      h('div', { class: 'page-actions' }, kind === 'vehicles' ? btn('Add several', { ic: 'list', onClick: openAddSeveral }) : null, btn(kind === 'vehicles' ? 'Add vehicle' : 'Add helmets', { kind: 'primary', ic: 'plus', onClick: openAdd }))),
+      h('div', { class: 'page-actions' },
+        kind === 'vehicles' && can.manager() ? btn('Import from Excel', { ic: 'list', onClick: openImportVehicles }) : null,
+        kind === 'helmets' ? btn('Import from Excel', { ic: 'list', onClick: openImportHelmets }) : null,
+        kind === 'vehicles' ? btn('Add several', { ic: 'list', onClick: openAddSeveral }) : null,
+        btn(kind === 'vehicles' ? 'Add vehicle' : 'Add helmets', { kind: 'primary', ic: 'plus', onClick: openAdd }))),
     h('div', { class: 'toolbar' }, h('div', { class: 'search' }, icon('search', 18), search), h('div', { class: 'filters' }, placeSel, modelSel)), countEl, list);
   await load();
   if (params.add) openAdd();
@@ -77,6 +86,7 @@ export async function render(kind, root, params) {
   // ---------------------------------------------------------------- add
   function openAdd() {
     if (!activeLocations().length) return toast('Add a location in the Admin panel first.', 'error');
+    if (kind === 'vehicles' && can.manager()) return openVehicleForm(null);
     if (kind === 'vehicles') {
       const num = input({ placeholder: 'For example V1001', autofocus: true });
       const mod = select(state.models.filter(m => m.active).map(m => ({ value: String(m.id), label: m.name })));
@@ -92,16 +102,21 @@ export async function render(kind, root, params) {
     } else {
       const codes = textarea({ rows: '5', placeholder: 'A1-A10\nF65, F66', autofocus: true });
       const where = select(locOptions());
-      const fCodes = field('Helmet codes', codes, { required: true, hint: 'One per line or separated by commas. Use A1-A10 for a range.' });
+      const hName = input({ placeholder: 'For example Atom' }), hType = input({ placeholder: 'For example Full Face', list: 'dl-htype' });
+      const dlH = h('datalist', { id: 'dl-htype' }, [...new Set(['Full Face', 'Half Face', 'Flip Up', ...st.items.map(x => x.helmet_type).filter(Boolean)])].map(t => h('option', { value: t })));
+      const fCodes = field('Helmet IDs', codes, { required: true, hint: 'One per line or separated by commas. Use A1-A10 for a range.' });
       const preview = h('p', { class: 'muted small' });
       codes.addEventListener('input', () => { const r = parseCodes(codes.value); preview.textContent = r.error || (r.codes.length ? `${r.codes.length} helmet${r.codes.length === 1 ? '' : 's'}: ${r.codes.slice(0, 6).join(', ')}${r.codes.length > 6 ? '…' : ''}` : ''); });
       const submit = btn('Add helmets', { kind: 'primary', type: 'submit' }); submit.setAttribute('form', 'add-form');
       const form = h('form', { id: 'add-form', class: 'stack', novalidate: true, on: { submit: (ev) => { ev.preventDefault(); fCodes.setError('');
-        const r = parseCodes(codes.value); if (r.error) return fCodes.setError(r.error); if (!r.codes.length) return fCodes.setError('Enter at least one helmet code.');
-        busy(submit, async () => { try { const res = await rpc('add_helmets', { p_codes: r.codes, p_location_id: Number(where.value) });
-          toast(`${res.added} helmet${res.added === 1 ? '' : 's'} added${res.skipped?.length ? `, ${res.skipped.length} already existed` : ''}`);
-          if (res.skipped?.length) toast(`Already existed: ${res.skipped.slice(0, 8).join(', ')}${res.skipped.length > 8 ? '…' : ''}`, 'error');
-          s.close(); reload(); } catch (e) { fCodes.setError(friendlyError(e)); } }); } } }, fCodes, preview, field('Where are they now?', where, { required: true }));
+        const r = parseCodes(codes.value); if (r.error) return fCodes.setError(r.error); if (!r.codes.length) return fCodes.setError('Enter at least one helmet ID.');
+        const extra = {}; if (hName.value.trim()) extra.name = hName.value.trim(); if (hType.value.trim()) extra.helmet_type = hType.value.trim();
+        busy(submit, async () => { try { const res = await rpc('save_helmets', { p_rows: r.codes.map(code => ({ code, ...extra })), p_location_id: Number(where.value) });
+          const skipped = res.skipped + res.updated;
+          toast(`${res.added} helmet${res.added === 1 ? '' : 's'} added${skipped ? `, ${skipped} already existed` : ''}`);
+          if (res.errors?.length) toast(`${res.errors[0].key}: ${res.errors[0].message}`, 'error');
+          s.close(); reload(); } catch (e) { fCodes.setError(friendlyError(e)); } }); } } }, fCodes, preview,
+        h('div', { class: 'grid-2' }, field('Name (same for all)', hName), field('Type (same for all)', hType)), dlH, field('Where are they now?', where, { required: true }));
       const s = openSheet({ title: 'Add helmets', body: form, footer: [btn('Cancel', { onClick: () => s.close() }), submit] });
     }
   }
@@ -150,6 +165,7 @@ export async function render(kind, root, params) {
       h('div', { class: `callout ${av.ok ? 'ok' : ''}` }, icon(av.ok ? 'check' : 'info', 18), h('span', av.ok ? `Ready to use. It is at ${placeOf(it).label}.` : `Not available for a delivery. ${av.why}`)),
       K.noun === 'vehicle' && it.current_state === 'with_customer' ? h('div', { class: 'callout' }, icon('lock', 18), h('span', 'This vehicle is with a customer. Nobody can move it, check it in, correct it or block it. It comes back only through a Pickup.')) : null,
       K.noun === 'vehicle' && it.current_state === 'waiting_approval' ? h('div', { class: 'callout' }, icon('lock', 18), h('span', 'This vehicle is waiting for approval. It cannot be moved or checked in until its delivery, swap or pickup is approved or cancelled.')) : null,
+      masterBlock(it),
       it.remarks ? h('div', { class: 'section-lite' }, h('h3', 'Remarks'), h('p', { class: 'prewrap' }, it.remarks)) : null,
       h('div', { class: 'section-lite' }, h('h3', 'History'), tl));
     const foot = [];
@@ -203,18 +219,145 @@ export async function render(kind, root, params) {
     const s = openSheet({ title: `Move or check ${it[K.codeKey]}`, body: form, footer: [btn('Cancel', { onClick: () => s.close() }), submit] });
   }
 
+  function masterBlock(it) {
+    const kv = (k, v) => (v === null || v === undefined || v === '' ? null : h('div', { class: 'kv' }, h('dt', k), h('dd', v)));
+    if (K.noun === 'helmet') {
+      const rows = [kv('Name', it.name), kv('Type', it.helmet_type)].filter(Boolean);
+      return rows.length ? h('div', { class: 'section-lite' }, h('h3', 'Helmet details'), h('dl', { class: 'kvs' }, rows)) : null;
+    }
+    const ins = insuranceState(it.insurance_end);
+    const docs = [it.rc_file ? btn('View RC', { ic: 'eye', small: true, onClick: () => openDoc(it.rc_file) }) : null,
+      it.insurance_file ? btn('View insurance', { ic: 'eye', small: true, onClick: () => openDoc(it.insurance_file) }) : null].filter(Boolean);
+    const rates = SLABS.map(sl => kv(sl.label, it[sl.key] === null || it[sl.key] === undefined ? null : `${fmtMoney(it[sl.key])} per day`)).filter(Boolean);
+    return h('div', { class: 'stack' },
+      h('div', { class: 'section-lite' }, h('h3', 'Vehicle details'), h('dl', { class: 'kvs' }, [
+        kv('Brand', it.brand), kv('Type', it.vehicle_type), kv('CC', it.cc), kv('Year', it.year), kv('Colour', it.color),
+        kv('Vehicle owner', it.owner_name), kv('Insurance owner', it.insurance_owner),
+        it.insurance_end ? kv('Insurance ends', h('span', null, fmtDay(it.insurance_end), ' ', ins.kind === 'expired' ? chip('Expired', 'pink', 'alert') : ins.kind === 'soon' ? chip(`In ${ins.days} days`, 'aqua', 'clock') : null)) : null,
+      ].filter(Boolean))),
+      rates.length ? h('div', { class: 'section-lite' }, h('h3', 'Rent per day'), h('dl', { class: 'kvs' }, [...rates, kv('Extra km', it.extra_km_rate === null || it.extra_km_rate === undefined ? null : `${fmtMoney(it.extra_km_rate)} per km`)].filter(Boolean))) : null,
+      docs.length ? h('div', { class: 'section-lite' }, h('h3', 'Documents'), h('div', { class: 'page-actions' }, docs)) : null);
+  }
+
+  // ---------------------------------------------------------------- full vehicle master form (add and edit)
+  function openVehicleForm(it) {
+    const v = it || {};
+    if (!it && !activeLocations().length) return toast('Add a location in the Admin panel first.', 'error');
+    const F = {};
+    const mk = (key, label, ctrl, opts) => (F[key] = field(label, ctrl, opts));
+    const val = (x) => (x === null || x === undefined ? '' : String(x));
+    const num = input({ value: val(v.number), autofocus: true, placeholder: 'For example TN56K59857' });
+    const modelIn = input({ value: val(model(v.model_id)?.name), list: 'dl-model', placeholder: 'Choose or type a new model' });
+    const dlModel = h('datalist', { id: 'dl-model' }, state.models.filter(m => m.active).map(m => h('option', { value: m.name })));
+    const brand = input({ value: val(v.brand), placeholder: 'For example Bajaj' });
+    const dlType = h('datalist', { id: 'dl-type' }, [...new Set([...DEFAULT_TYPES, ...st.items.map(x => x.vehicle_type).filter(Boolean)])].map(t => h('option', { value: t })));
+    const typeIn = input({ value: val(v.vehicle_type), list: 'dl-type', placeholder: 'For example Cruiser' });
+    const cc = input({ value: val(v.cc), type: 'number', min: '1', inputmode: 'numeric', placeholder: 'For example 220' });
+    const year = input({ value: val(v.year), type: 'number', min: '1980', max: '2100', inputmode: 'numeric', placeholder: 'For example 2024' });
+    const color = input({ value: val(v.color) });
+    const insEnd = input({ value: val(v.insurance_end), type: 'date' });
+    const owner = input({ value: val(v.owner_name) }), insOwner = input({ value: val(v.insurance_owner) });
+    const extra = input({ value: val(v.extra_km_rate), type: 'number', min: '0', step: '0.01', inputmode: 'decimal' });
+    const rate = Object.fromEntries(SLABS.map(sl => [sl.key, input({ value: val(v[sl.key]), type: 'number', min: '0', step: '0.01', inputmode: 'decimal' })]));
+    const rcF = docField({ label: 'RC (PDF or photo)', existing: v.rc_file }), insF = docField({ label: 'Insurance (PDF or photo)', existing: v.insurance_file });
+    const where = it ? null : select(locOptions());
+    const rem = textarea({ rows: '2', value: val(v.remarks) });
+    const err = h('p', { class: 'field-error', hidden: true, role: 'alert' });
+    const submit = btn(it ? 'Save changes' : 'Add vehicle', { kind: 'primary', type: 'submit' }); submit.setAttribute('form', 'vm-form');
+    const bad = (x) => x === '' || !Number.isFinite(Number(x)) || Number(x) < 0;
+    const form = h('form', { id: 'vm-form', class: 'stack', novalidate: true, on: { submit: (ev) => { ev.preventDefault(); err.hidden = true;
+      Object.values(F).forEach(f => f.setError(''));
+      let ok = true; const no = (k, m) => { F[k].setError(m); ok = false; };
+      if (!num.value.trim()) no('number', 'Enter the vehicle number.');
+      if (!modelIn.value.trim()) no('model', 'Choose or type the model.');
+      if (cc.value.trim() && !(Number(cc.value) > 0)) no('cc', 'Enter the engine size as a number.');
+      if (year.value.trim() && !(Number(year.value) >= 1980 && Number(year.value) <= 2100)) no('year', 'Enter a year like 2024.');
+      if (bad(extra.value.trim())) no('extra', 'Enter the extra km rate.');
+      for (const sl of SLABS) if (bad(rate[sl.key].value.trim())) no(sl.key, 'Enter the rent per day.');
+      if (!ok) return;
+      busy(submit, async () => { try {
+        const label = num.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const rcPath = await rcF.commit('vehicles', `${label}-rc`), insPath = await insF.commit('vehicles', `${label}-insurance`);
+        const row = { id: it?.id, number: num.value, model: modelIn.value, brand: brand.value, vehicle_type: typeIn.value, cc: cc.value, year: year.value, color: color.value,
+          insurance_end: insEnd.value, owner_name: owner.value, insurance_owner: insOwner.value, rc_file: rcPath, insurance_file: insPath,
+          extra_km_rate: extra.value, remarks: rem.value };
+        for (const sl of SLABS) row[sl.key] = rate[sl.key].value;
+        const res = await rpc('save_vehicles', { p_rows: [row], p_location_id: where ? Number(where.value) : null });
+        if (res.errors?.length) throw new Error(res.errors[0].message);
+        rcF.cleanup(); insF.cleanup(); await loadRefs();
+        toast(it ? 'Changes saved' : 'Vehicle added'); s.close(); await reload(); if (it) openItem(it.id);
+      } catch (e) { err.textContent = friendlyError(e); err.hidden = false; } }); } } },
+      mk('number', 'Vehicle number', num, { required: true, hint: it ? '' : 'This is the key. Every vehicle number is unique.' }),
+      h('div', { class: 'grid-2' }, mk('model', 'Model', modelIn, { required: true }), mk('brand', 'Brand', brand)), dlModel, dlType,
+      h('div', { class: 'grid-2' }, mk('type', 'Type', typeIn), mk('cc', 'CC', cc)),
+      h('div', { class: 'grid-2' }, mk('year', 'Year', year), mk('color', 'Colour', color)),
+      h('div', { class: 'grid-2' }, mk('owner', 'Vehicle owner name', owner), mk('insOwner', 'Insurance owner name', insOwner)),
+      mk('insEnd', 'Insurance end date', insEnd),
+      h('div', { class: 'section-lite' }, h('h3', 'Rent per day'), h('p', { class: 'muted small' }, 'The rent in a delivery is filled in from these rates, based on the number of days. It can be changed for one delivery without changing this master.'),
+        h('div', { class: 'grid-2' }, SLABS.map(sl => mk(sl.key, `${sl.label} (₹ per day)`, rate[sl.key], { required: true })), mk('extra', 'Extra km (₹ per km)', extra, { required: true }))),
+      h('div', { class: 'section-lite' }, h('h3', 'Documents'), h('p', { class: 'muted small' }, 'PDF or photo, up to 2 MB each.'), rcF.el, insF.el),
+      where ? mk('where', 'Where is it now?', where, { required: true }) : null,
+      mk('rem', 'Remarks', rem), err);
+    const s = openSheet({ title: it ? `Edit ${it.number}` : 'Add vehicle', body: form, wide: true, footer: [btn('Cancel', { onClick: () => s.close() }), submit] });
+  }
+
+  // ---------------------------------------------------------------- import a table copied from Excel
+  const showImport = ({ title, intro, example, parse, save, extraField, noun }) => {
+    const ta = textarea({ rows: '8', placeholder: example, autofocus: true });
+    const prev = h('div', { class: 'results' }), out = h('div', { class: 'results' });
+    let parsed = { rows: [], problems: [] };
+    const paintPrev = () => mount(prev, !ta.value.trim() ? null : [
+      h('p', { class: 'res ok' }, icon('check', 16), `${parsed.rows.length} ${noun}${parsed.rows.length === 1 ? '' : 's'} ready`),
+      ...parsed.problems.slice(0, 8).map(p => h('p', { class: 'res bad' }, icon('alert', 16), `Line ${p.line}${p.key ? ` (${p.key})` : ''}: ${p.message}`)),
+      parsed.problems.length > 8 ? h('p', { class: 'muted small' }, `…and ${parsed.problems.length - 8} more lines with problems`) : null]);
+    ta.addEventListener('input', () => { parsed = parse(ta.value); paintPrev(); });
+    const fTa = field('Paste the table here', ta, { required: true, hint: intro });
+    const submit = btn('Import', { kind: 'primary', type: 'submit' }); submit.setAttribute('form', 'imp-form');
+    const form = h('form', { id: 'imp-form', class: 'stack', novalidate: true, on: { submit: (ev) => { ev.preventDefault(); fTa.setError('');
+      if (!parsed.rows.length) return fTa.setError(`Paste at least one ${noun} first.`);
+      busy(submit, async () => { try {
+        mount(out); let added = 0, updated = 0, skipped = 0; const errors = [];
+        const rows = parsed.rows.map(({ _line, ...r }) => { Object.keys(r).forEach(k => { if (r[k] === '') delete r[k]; }); return r; });   // blank cells never erase saved data
+        for (let i = 0; i < rows.length; i += 100) {
+          const res = await save(rows.slice(i, i + 100)); added += res.added; updated += res.updated; skipped += res.skipped || 0; errors.push(...res.errors);
+        }
+        await loadRefs();
+        mount(out, h('p', { class: 'res ok' }, icon('check', 16), `${added} added, ${updated} updated${skipped ? `, ${skipped} skipped (already there)` : ''}`),
+          ...errors.slice(0, 10).map(x => h('p', { class: 'res bad' }, icon('alert', 16), `${x.key || 'Row ' + x.row}: ${x.message}`)));
+        toast(`${added} added, ${updated} updated`, errors.length ? 'error' : 'ok'); reload();
+      } catch (e) { fTa.setError(friendlyError(e)); } }); } } }, fTa, prev, extraField, out);
+    const s = openSheet({ title, body: form, wide: true, footer: [btn('Close', { onClick: () => s.close() }), submit] });
+  };
+  function openImportVehicles() {
+    const where = select(locOptions());
+    showImport({ title: 'Import vehicles from Excel', noun: 'vehicle', parse: parseVehicleSheet, extraField: field('New vehicles are now at', where, { required: true }),
+      intro: 'In Excel, select the table with its heading row, copy it, and paste here. A vehicle number that already exists is updated; a new one is added. Blank cells never erase saved data. Add the RC and insurance files on each vehicle afterwards.',
+      example: 'Vehicle Number\tModel\tBrand\tType\tCCC\tYear\tColor\tInsurance End Date\t…', save: (rows) => rpc('save_vehicles', { p_rows: rows, p_location_id: Number(where.value) }) });
+  }
+  function openImportHelmets() {
+    const where = select(locOptions());
+    showImport({ title: 'Import helmets from Excel', noun: 'helmet', parse: parseHelmetSheet, extraField: field('New helmets are now at', where, { required: true }),
+      intro: 'Three columns: Helmet ID, Name, Type. Copy from Excel and paste here. A new ID is added.' + (can.manager() ? ' An ID that already exists is updated.' : ' IDs that already exist are skipped.'),
+      example: 'Helmet ID\tName\tType\nA1\tAtom\tFull Face', save: (rows) => rpc('save_helmets', { p_rows: rows, p_location_id: Number(where.value) }) });
+  }
+
   function openEdit(it) {
+    if (K.noun === 'vehicle') return openVehicleForm(it);
     const num = input({ value: it[K.codeKey], autofocus: true });
     const mod = K.hasModel ? select(state.models.filter(m => m.active || m.id === it.model_id).map(m => ({ value: String(m.id), label: m.name })), { value: String(it.model_id) }) : null;
     const rem = textarea({ rows: '3', value: it.remarks || '' });
+    const hName = input({ value: it.name || '' }), hType = input({ value: it.helmet_type || '', list: 'dl-htype2' });
+    const dlH = h('datalist', { id: 'dl-htype2' }, [...new Set(['Full Face', 'Half Face', 'Flip Up', ...st.items.map(x => x.helmet_type).filter(Boolean)])].map(t => h('option', { value: t })));
     const fNum = field(K.codeLabel, num, { required: true });
     const submit = btn('Save changes', { kind: 'primary', type: 'submit' }); submit.setAttribute('form', 'edit-form');
     const form = h('form', { id: 'edit-form', class: 'stack', novalidate: true, on: { submit: (ev) => { ev.preventDefault(); fNum.setError('');
       if (!num.value.trim()) return fNum.setError('This is required.');
       busy(submit, async () => { try {
-        await rpc(`update_${K.noun}`, K.hasModel ? { p_id: it.id, p_number: num.value, p_model_id: Number(mod.value), p_remarks: rem.value || null } : { p_id: it.id, p_code: num.value, p_remarks: rem.value || null });
+        await rpc('update_helmet', { p_id: it.id, p_code: num.value, p_remarks: rem.value || null });
+        const res = await rpc('save_helmets', { p_rows: [{ id: it.id, code: num.value, name: hName.value, helmet_type: hType.value }], p_location_id: null });
+        if (res.errors?.length) throw new Error(res.errors[0].message);
         toast('Changes saved'); s.close(); await reload(); openItem(it.id);
-      } catch (e) { fNum.setError(friendlyError(e)); } }); } } }, fNum, K.hasModel ? field('Model', mod) : null, field('Remarks', rem));
+      } catch (e) { fNum.setError(friendlyError(e)); } }); } } }, fNum, h('div', { class: 'grid-2' }, field('Name', hName), field('Type', hType)), dlH, field('Remarks', rem));
     const s = openSheet({ title: `Edit ${it[K.codeKey]}`, body: form, footer: [btn('Cancel', { onClick: () => s.close() }), submit] });
   }
 
