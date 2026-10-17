@@ -126,7 +126,7 @@ async function locationsTab(panel) {
   await loadRefs();
   const redraw = async () => { await loadRefs(); locationsTab(panel); };
   const add = () => {
-    const type = select([{ value: 'Office', label: 'Office' }, { value: 'Service Centre', label: 'Service Centre' }]); const name = input({ autofocus: true, placeholder: 'For example Office-3' });
+    const type = select([{ value: 'Office', label: 'Office' }, { value: 'Service Centre', label: 'Service Centre' }, { value: 'Other', label: 'Other place' }]); const name = input({ autofocus: true, placeholder: 'For example Office-3' });
     const fName = field('Name', name, { required: true }); const submit = btn('Add location', { kind: 'primary', type: 'submit' }); submit.setAttribute('form', 'loc-form');
     const form = h('form', { id: 'loc-form', class: 'stack', novalidate: true, on: { submit: (ev) => { ev.preventDefault(); fName.setError(''); if (!name.value.trim()) return fName.setError('Enter a name.');
       busy(submit, async () => { try { const { error } = await sb.from('locations').insert({ type: type.value, name: name.value.trim() }); if (error) throw error; toast('Location added'); s.close(); redraw(); } catch (e) { fName.setError(friendlyError(e)); } }); } } }, field('Type', type), fName);
@@ -142,8 +142,8 @@ async function locationsTab(panel) {
     const r = await confirmDialog({ title: it.active ? `Switch off ${it.name}?` : `Switch on ${it.name}?`, message: it.active ? 'It can no longer be chosen for new moves. History is kept.' : 'It can be chosen again.', confirmLabel: it.active ? 'Switch off' : 'Switch on', danger: it.active }); if (!r) return;
     try { const { error } = await sb.from('locations').update({ active: !it.active }).eq('id', it.id); if (error) throw error; redraw(); } catch (e) { toast(friendlyError(e), 'error'); }
   };
-  listEditor({ panel, title: 'Locations', blurb: 'Offices and service centres. Only a vehicle or helmet at an Office can be used for a delivery.', items: state.locations, noun: 'locations',
-    extraCell: (l) => chip(l.type, l.type === 'Office' ? 'blue' : 'pink', 'pin'), addForm: { button: btn('Add location', { kind: 'primary', ic: 'plus', onClick: add }) }, onRename: rename, onToggle: toggle });
+  listEditor({ panel, title: 'Locations', blurb: 'Offices, service centres and other places. Only a vehicle or helmet at an Office can be used for a delivery.', items: state.locations, noun: 'locations',
+    extraCell: (l) => chip(l.type, l.type === 'Office' ? 'blue' : l.type === 'Service Centre' ? 'pink' : 'aqua', 'pin'), addForm: { button: btn('Add location', { kind: 'primary', ic: 'plus', onClick: add }) }, onRename: rename, onToggle: toggle });
 }
 async function modelsTab(panel) {
   await loadRefs();
