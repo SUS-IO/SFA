@@ -6,6 +6,7 @@ import { loginView, setupNeeded, brandMark } from './views/login.js';
 import { forcedPasswordView, openAccount } from './views/account.js';
 import { loadTodo } from './core/todo.js';
 import { startSearchableSelects } from './core/ss.js';
+import { startAgeingWatch, stopAgeingWatch } from './core/ageing.js';
 
 const app = document.getElementById('app');
 startSearchableSelects();
@@ -18,12 +19,13 @@ const ROUTES = {
   customers: { title: 'Customers', icon: 'users', load: () => import('./views/customers.js') },
   vehicles:  { title: 'Vehicles', icon: 'bike', load: () => import('./views/assets.js').then(m => ({ render: (el, p, c) => m.render('vehicles', el, p, c) })) },
   helmets:   { title: 'Helmets', icon: 'helmet', load: () => import('./views/assets.js').then(m => ({ render: (el, p, c) => m.render('helmets', el, p, c) })) },
+  movement:  { title: 'Asset movement', icon: 'move', load: () => import('./views/movement.js') },
   money:     { title: 'Money', icon: 'wallet', load: () => import('./views/money.js') },
   inbox:     { title: 'To do', icon: 'inbox', load: () => import('./views/inbox.js') },
   logs:      { title: 'Logs', icon: 'list', load: () => import('./views/logs.js') },
   admin:     { title: 'Admin', icon: 'shield', load: () => import('./views/admin.js'), guard: () => can.admin() },
 };
-const SIDE = ['dashboard', 'deliveries', 'inbox', 'money', 'customers', 'vehicles', 'helmets', 'logs', 'admin'];
+const SIDE = ['dashboard', 'deliveries', 'inbox', 'money', 'customers', 'vehicles', 'helmets', 'movement', 'logs', 'admin'];
 const TABS = ['dashboard', 'deliveries', 'inbox', 'money'];
 
 let cleanup = null, watching = false, shell = null;
@@ -97,6 +99,7 @@ function buildShell() {
 }
 
 async function doSignOut() {
+  stopAgeingWatch();
   await session.signOut(); shell = null; location.hash = '';
   showLogin();
 }
@@ -112,9 +115,10 @@ async function enterApp() {
   }
   if (state.me.must_change_password) return mount(app, forcedPasswordView({ onDone: enterApp }));
   shell = buildShell(); mount(app, shell.el);
-  if (!watching) { watching = true; session.watchExpiry(() => { shell = null; showLogin(`Your ${cfg.SESSION_HOURS}-hour session ended. Please sign in again.`); }); }
+  if (!watching) { watching = true; session.watchExpiry(() => { stopAgeingWatch(); shell = null; showLogin(`Your ${cfg.SESSION_HOURS}-hour session ended. Please sign in again.`); }); }
   if (!location.hash) history.replaceState(null, '', '#/dashboard');
   route();
+  startAgeingWatch();    // popup for Approver, Manager, Admin and Superadmin when assets go 4+ hours without an update
 }
 window.addEventListener('hashchange', route);
 
