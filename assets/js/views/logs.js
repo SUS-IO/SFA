@@ -3,8 +3,8 @@ import { sb, fetchAll } from '../core/supa.js';
 import { state, loc, whoName } from '../core/store.js';
 
 const PAGE = 50;
-const EVENTS = ['Added', 'Movement', 'Manual Check', 'Correction', 'Blocked', 'Unblocked', 'Delivery Submitted', 'Delivery', 'Swap Submitted', 'Swap Out', 'Swap In', 'Pickup Submitted', 'Pickup'];
-const EVENT_CHIP = { Added: 'neutral', Movement: 'blue', 'Manual Check': 'aqua', Correction: 'pink', Blocked: 'navy', Unblocked: 'neutral', Delivery: 'blue', 'Delivery Submitted': 'aqua', 'Swap Submitted': 'aqua', 'Pickup Submitted': 'aqua', 'Swap Out': 'pink', 'Swap In': 'pink', Pickup: 'blue' };
+const EVENTS = ['Added', 'Movement', 'Manual Check', 'Seen', 'Communicated', 'Correction', 'Blocked', 'Unblocked', 'Delivery Submitted', 'Delivery', 'Swap Submitted', 'Swap Out', 'Swap In', 'Pickup Submitted', 'Pickup'];
+const EVENT_CHIP = { Added: 'neutral', Movement: 'blue', 'Manual Check': 'aqua', Seen: 'aqua', Communicated: 'blue', Correction: 'pink', Blocked: 'navy', Unblocked: 'neutral', Delivery: 'blue', 'Delivery Submitted': 'aqua', 'Swap Submitted': 'aqua', 'Pickup Submitted': 'aqua', 'Swap Out': 'pink', 'Swap In': 'pink', Pickup: 'blue' };
 const place = (s, id, text) => !s ? '' : s === 'at_location' ? (loc(id)?.name || 'Unknown place') : s === 'with_customer' ? `With customer${text ? ` (${text})` : ''}` : s === 'waiting_approval' ? `Waiting for approval${loc(id) ? ` (${loc(id).name})` : ''}` : `In transit${text ? ` (${text})` : ''}`;
 
 export async function render(root, params) {
