@@ -5,41 +5,51 @@
 }
 /* SFA Bike | Custom Theme Palette */
 :root {
-  --deep-purple: #502D55; 
-  --muted-plum: #935073; 
-  --warm-apricot: #F6DBC0; 
-  --alabaster: #F8F4E9;
+  --deep-purple: #9D174D;
+  --muted-plum: #BE185D;
+  --warm-apricot: #F26A8D;
+  --alabaster: #FFF7FA;
 
   --blue: var(--muted-plum);
-  --blue-600: #753B5B;
-  --blue-50: #F3E8EE;
-  
+  --blue-600: #9D174D;
+  --blue-50: #FCE7F3;
+
   --navy: var(--deep-purple);
   --mist: var(--alabaster);
-  --aqua: var(--warm-apricot);
-  
+  --aqua: #FCE7F3;
+
   --pink: #F26A8D;
-  --pink-50: #FDE8EE; 
-  --pink-ink: #B3234F; 
-  
-  --green: #1B8A5A; 
-  --green-50: #DDF3E8; 
+  --pink-50: #FCE7F3;
+  --pink-ink: #9D174D;
+
+  --green: #1B8A5A;
+  --green-50: #DDF3E8;
   --green-ink: #0C5A39;
-  
-  --ink: var(--deep-purple); 
-  --ink-2: #6B5B6E; 
-  --line: #E5D9CC; 
-  --line-2: #D1C2B4; 
-  --surface: #fff; 
-  --wash: #EFEADF;
-  
-  --r-sm: 10px; --r-md: 14px; --r-lg: 20px;
-  --shadow: 0 1px 2px rgba(80,45,85,.06), 0 10px 28px -14px rgba(80,45,85,.22);
-  --shadow-lg: 0 24px 60px -20px rgba(80,45,85,.45);
-  --side-w: 248px; --tab-h: 64px;
-  
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-size: 15px; line-height: 1.5; color: var(--ink); background: var(--mist);
+
+  --ink: #321725;
+  --ink-2: #7B5365;
+  --line: #F3D8E5;
+  --line-2: #E8C3D3;
+  --surface: #FFFFFF;
+  --wash: #FCE7F3;
+
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+
+  --shadow: 0 1px 2px rgba(157, 23, 77, .06),
+            0 10px 28px -14px rgba(157, 23, 77, .18);
+  --shadow-lg: 0 24px 60px -20px rgba(157, 23, 77, .25);
+
+  --side-w: 248px;
+  --tab-h: 64px;
+
+  font-family: 'Inter', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--mist);
+
   -webkit-text-size-adjust: 100%;
 }
 *, *::before, *::after { box-sizing: border-box; }
