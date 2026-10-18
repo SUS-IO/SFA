@@ -6,42 +6,43 @@
 /* SFA Bike | Custom Theme Palette */
 
 
+
 :root {
-  --deep-purple: #101114;
-  --muted-plum: #F5C518;
-  --warm-apricot: #8B949E;
+  --deep-purple: #B71C2C;
+  --muted-plum: #E62429;
+  --warm-apricot: #42A5F5;
   --alabaster: #F8FAFC;
 
-  --blue: #F5C518;
-  --blue-600: #D4A900;
-  --blue-50: #FFF8D6;
+  --blue: #1565C0;
+  --blue-600: #0D47A1;
+  --blue-50: #E3F2FD;
 
-  --navy: #101114;
+  --navy: #15304F;
   --mist: #F8FAFC;
-  --aqua: #E8ECF1;
+  --aqua: #ECEFF1;
 
-  --pink: #F5C518;
-  --pink-50: #FFF8D6;
-  --pink-ink: #785900;
+  --pink: #E62429;
+  --pink-50: #FFEBEE;
+  --pink-ink: #B71C2C;
 
   --green: #16865A;
   --green-50: #DDF3E8;
   --green-ink: #0C5A39;
 
-  --ink: #22252B;
-  --ink-2: #626B78;
-  --line: #DDE2E8;
-  --line-2: #C5CBD4;
+  --ink: #172536;
+  --ink-2: #607080;
+  --line: #DCE3EA;
+  --line-2: #B0BEC5;
   --surface: #FFFFFF;
-  --wash: #E8ECF1;
+  --wash: #ECEFF1;
 
   --r-sm: 10px;
   --r-md: 14px;
   --r-lg: 20px;
 
-  --shadow: 0 1px 2px rgba(16,17,20,.06),
-            0 10px 28px -14px rgba(16,17,20,.18);
-  --shadow-lg: 0 24px 60px -20px rgba(16,17,20,.25);
+  --shadow: 0 1px 2px rgba(21,48,79,.06),
+            0 10px 28px -14px rgba(21,48,79,.20);
+  --shadow-lg: 0 24px 60px -20px rgba(21,48,79,.28);
 
   --side-w: 248px;
   --tab-h: 64px;
