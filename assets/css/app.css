@@ -4,47 +4,49 @@
   src: url('../fonts/plus-jakarta-sans-latin-wght-normal.woff2') format('woff2-variations'), url('../fonts/plus-jakarta-sans-latin-wght-normal.woff2') format('woff2');
 }
 /* SFA Bike | Custom Theme Palette */
+
+
 :root {
-  --deep-purple: #9D174D;
-  --muted-plum: #BE185D;
-  --warm-apricot: #F26A8D;
-  --alabaster: #FFF7FA;
+  --deep-purple: #101114;
+  --muted-plum: #F5C518;
+  --warm-apricot: #8B949E;
+  --alabaster: #F8FAFC;
 
-  --blue: var(--muted-plum);
-  --blue-600: #9D174D;
-  --blue-50: #FCE7F3;
+  --blue: #F5C518;
+  --blue-600: #D4A900;
+  --blue-50: #FFF8D6;
 
-  --navy: var(--deep-purple);
-  --mist: var(--alabaster);
-  --aqua: #FCE7F3;
+  --navy: #101114;
+  --mist: #F8FAFC;
+  --aqua: #E8ECF1;
 
-  --pink: #F26A8D;
-  --pink-50: #FCE7F3;
-  --pink-ink: #9D174D;
+  --pink: #F5C518;
+  --pink-50: #FFF8D6;
+  --pink-ink: #785900;
 
-  --green: #1B8A5A;
+  --green: #16865A;
   --green-50: #DDF3E8;
   --green-ink: #0C5A39;
 
-  --ink: #321725;
-  --ink-2: #7B5365;
-  --line: #F3D8E5;
-  --line-2: #E8C3D3;
+  --ink: #22252B;
+  --ink-2: #626B78;
+  --line: #DDE2E8;
+  --line-2: #C5CBD4;
   --surface: #FFFFFF;
-  --wash: #FCE7F3;
+  --wash: #E8ECF1;
 
   --r-sm: 10px;
   --r-md: 14px;
   --r-lg: 20px;
 
-  --shadow: 0 1px 2px rgba(157, 23, 77, .06),
-            0 10px 28px -14px rgba(157, 23, 77, .18);
-  --shadow-lg: 0 24px 60px -20px rgba(157, 23, 77, .25);
+  --shadow: 0 1px 2px rgba(16,17,20,.06),
+            0 10px 28px -14px rgba(16,17,20,.18);
+  --shadow-lg: 0 24px 60px -20px rgba(16,17,20,.25);
 
   --side-w: 248px;
   --tab-h: 64px;
 
-  font-family: 'Inter', Arial, sans-serif;
+  font-family: Arial, sans-serif;
   font-size: 15px;
   line-height: 1.5;
   color: var(--ink);
@@ -52,6 +54,8 @@
 
   -webkit-text-size-adjust: 100%;
 }
+
+
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; background: var(--mist); }
 body.no-scroll { overflow: hidden; }
