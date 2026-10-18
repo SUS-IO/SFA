@@ -7,47 +7,48 @@
 
 
 
+
 :root {
-  --deep-purple: #B71C2C;
-  --muted-plum: #E62429;
-  --warm-apricot: #42A5F5;
-  --alabaster: #F8FAFC;
+  --deep-purple: #181A20;
+  --muted-plum: #7B2CFF;
+  --warm-apricot: #B388FF;
+  --alabaster: #F4F6FA;
 
-  --blue: #1565C0;
-  --blue-600: #0D47A1;
-  --blue-50: #E3F2FD;
+  --blue: #7B2CFF;
+  --blue-600: #5D20C7;
+  --blue-50: #F0E8FF;
 
-  --navy: #15304F;
-  --mist: #F8FAFC;
-  --aqua: #ECEFF1;
+  --navy: #181A20;
+  --mist: #F4F6FA;
+  --aqua: #C5CBD5;
 
-  --pink: #E62429;
-  --pink-50: #FFEBEE;
-  --pink-ink: #B71C2C;
+  --pink: #B388FF;
+  --pink-50: #F0E8FF;
+  --pink-ink: #4215A8;
 
   --green: #16865A;
   --green-50: #DDF3E8;
   --green-ink: #0C5A39;
 
-  --ink: #172536;
-  --ink-2: #607080;
-  --line: #DCE3EA;
-  --line-2: #B0BEC5;
+  --ink: #20232B;
+  --ink-2: #656B78;
+  --line: #DFE3EA;
+  --line-2: #C5CBD5;
   --surface: #FFFFFF;
-  --wash: #ECEFF1;
+  --wash: #ECEEF3;
 
   --r-sm: 10px;
   --r-md: 14px;
   --r-lg: 20px;
 
-  --shadow: 0 1px 2px rgba(21,48,79,.06),
-            0 10px 28px -14px rgba(21,48,79,.20);
-  --shadow-lg: 0 24px 60px -20px rgba(21,48,79,.28);
+  --shadow: 0 1px 2px rgba(24,26,32,.08),
+            0 10px 28px -14px rgba(24,26,32,.25);
+  --shadow-lg: 0 24px 60px -20px rgba(24,26,32,.35);
 
   --side-w: 248px;
   --tab-h: 64px;
 
-  font-family: Arial, sans-serif;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   font-size: 15px;
   line-height: 1.5;
   color: var(--ink);
@@ -55,6 +56,7 @@
 
   -webkit-text-size-adjust: 100%;
 }
+
 
 
 *, *::before, *::after { box-sizing: border-box; }
