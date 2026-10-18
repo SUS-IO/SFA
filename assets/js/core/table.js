@@ -41,16 +41,17 @@ function compare(a, b) {
 // columns: [{ key, label, sort: (row) => number|string|null  (omit for a column that cannot sort), render: (row) => Node|string,
 //             csv: (row) => string (default: the sort value), nowrap }]
 export function dataTable({ columns, rowKey = 'id', defaultSort = null, selectable = false, selected = new Set(), onSelect = null, rowClass = null,
-  empty = 'Nothing to show.', storageKey = null, rowClick = null }) {
+  empty = 'Nothing to show.', storageKey = null, rowClick = null, serverKeys = null, onServerSort = null }) {
   ensureTableStyles();
   let rows = [], sort = defaultSort ? { ...defaultSort } : null, shown = [];
+  let serverMode = false;           // when on, columns named in serverKeys are sorted by the owner (database), not here
   if (storageKey) { try { const s = JSON.parse(sessionStorage.getItem(`dt:${storageKey}`) || 'null'); if (s && columns.some(c => c.key === s.key && c.sort)) sort = s; } catch { /* ignore */ } }
   const head = h('thead'), body = h('tbody'), table = h('table', { class: 'dt' }, head, body), el = h('div', { class: 'dt-wrap' }, table);
   let allBox = null;
 
   const sorted = () => {
     const col = sort && columns.find(c => c.key === sort.key && c.sort);
-    if (!col) return [...rows];
+    if (!col || (serverMode && serverKeys && serverKeys[sort.key])) return [...rows];
     const dir = sort.dir === 'desc' ? -1 : 1;
     return rows.map((r, i) => ({ r, i, v: col.sort(r) })).sort((x, y) => {
       const bx = blank(x.v), by = blank(y.v);
@@ -61,6 +62,7 @@ export function dataTable({ columns, rowKey = 'id', defaultSort = null, selectab
   function setSort(key) {
     sort = sort && sort.key === key ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' };
     if (storageKey) { try { sessionStorage.setItem(`dt:${storageKey}`, JSON.stringify(sort)); } catch { /* ignore */ } }
+    if (serverMode && serverKeys && serverKeys[sort.key]) { paintHead(); onServerSort?.(serverKeys[sort.key], sort.dir); return; }
     paint();
   }
   function paintHead() {
@@ -94,5 +96,5 @@ export function dataTable({ columns, rowKey = 'id', defaultSort = null, selectab
     const a = h('a', { href: url, download: `${name}.csv` }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
   paint();
-  return { el, setRows(r) { rows = r; paint(); }, repaint: paint, shown: () => shown, selected, toCsv, download };
+  return { el, setServerMode(on) { serverMode = !!on; }, sortState: () => sort, setRows(r) { rows = r; paint(); }, repaint: paint, shown: () => shown, selected, toCsv, download };
 }
