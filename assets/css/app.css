@@ -7,34 +7,54 @@
 
 
 
-
-
-
 :root {
-  --navy: #10284C;
-  --blue: #174A8B;
-  --blue-600: #103665;
-  --blue-50: #EAF2FC;
+  --deep-purple: #0F2747;
+  --muted-plum: #F7C600;
+  --warm-apricot: #8A96A8;
+  --alabaster: #F8FAFC;
 
-  --pink: #D62839;
-  --pink-50: #FCEAEC;
-  --pink-ink: #9F1C2A;
+  --blue: #1F4E8C;
+  --blue-600: #173B6A;
+  --blue-50: #E8F1FF;
 
-  --mist: #FFFFFF;
+  --navy: #0F2747;
+  --mist: #F8FAFC;
+  --aqua: #E4E8EE;
+
+  --pink: #F7C600;
+  --pink-50: #FFF7D6;
+  --pink-ink: #7A5A00;
+
+  --green: #16865A;
+  --green-50: #DDF3E8;
+  --green-ink: #0C5A39;
+
+  --ink: #1A2332;
+  --ink-2: #66758A;
+  --line: #DCE3EB;
+  --line-2: #C2CCD8;
   --surface: #FFFFFF;
-  --wash: #FFFFFF;
-  --aqua: #C7CED8;
+  --wash: #EEF2F7;
 
-  --ink: #202C3D;
-  --ink-2: #6B7789;
-  --line: #DCE3EC;
-  --line-2: #C7CED8;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
 
-  background: #FFFFFF;
+  --shadow: 0 1px 2px rgba(15,39,71,.06),
+            0 10px 28px -14px rgba(15,39,71,.18);
+  --shadow-lg: 0 24px 60px -20px rgba(15,39,71,.28);
+
+  --side-w: 248px;
+  --tab-h: 64px;
+
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--ink);
+  background: var(--mist);
+
+  -webkit-text-size-adjust: 100%;
 }
-
-
 
 
 *, *::before, *::after { box-sizing: border-box; }
