@@ -8,42 +8,56 @@
 
 
 
+
 :root {
-  --deep-purple: #181A20;
-  --muted-plum: #7B2CFF;
-  --warm-apricot: #B388FF;
-  --alabaster: #F4F6FA;
+  /* Wanda Maximoff — Scarlet Witch */
+  --deep-purple: #301329;
+  --muted-plum: #C21845;
+  --warm-apricot: #F45B82;
+  --alabaster: #FFFFFF;
 
-  --blue: #7B2CFF;
-  --blue-600: #5D20C7;
-  --blue-50: #F0E8FF;
+  --blue: #C21845;
+  --blue-600: #8E123D;
+  --blue-50: #FFF0F5;
 
-  --navy: #181A20;
-  --mist: #F4F6FA;
-  --aqua: #C5CBD5;
+  --navy: #301329;
+  --mist: #FFFFFF;
+  --aqua: #F1E7FA;
 
-  --pink: #B388FF;
-  --pink-50: #F0E8FF;
-  --pink-ink: #4215A8;
+  --pink: #F45B82;
+  --pink-50: #FFF0F5;
+  --pink-ink: #8E123D;
 
-  --green: #16865A;
-  --green-50: #DDF3E8;
-  --green-ink: #0C5A39;
+  --green: #25845A;
+  --green-50: #E2F5EB;
+  --green-ink: #145C3A;
 
-  --ink: #20232B;
-  --ink-2: #656B78;
-  --line: #DFE3EA;
-  --line-2: #C5CBD5;
+  --ink: #321B2B;
+  --ink-2: #896F82;
+  --line: #E8DDE7;
+  --line-2: #D5C4D3;
   --surface: #FFFFFF;
-  --wash: #ECEEF3;
+  --wash: #FFFFFF;
+
+  --gradient-primary:
+    linear-gradient(135deg, #650A25 0%, #C21845 55%, #F45B82 100%);
+
+  --gradient-action:
+    linear-gradient(110deg, #8E123D 0%, #C21845 55%, #E94D79 100%);
+
+  --gradient-mystic:
+    linear-gradient(120deg, #650A25 0%, #C21845 52%, #7950A5 100%);
+
+  --gradient-soft:
+    linear-gradient(110deg, #FFF0F5 0%, #FFFFFF 50%, #F1E7FA 100%);
 
   --r-sm: 10px;
   --r-md: 14px;
   --r-lg: 20px;
 
-  --shadow: 0 1px 2px rgba(24,26,32,.08),
-            0 10px 28px -14px rgba(24,26,32,.25);
-  --shadow-lg: 0 24px 60px -20px rgba(24,26,32,.35);
+  --shadow: 0 1px 2px rgba(101,10,37,.05),
+            0 10px 28px -14px rgba(101,10,37,.16);
+  --shadow-lg: 0 24px 60px -20px rgba(101,10,37,.22);
 
   --side-w: 248px;
   --tab-h: 64px;
@@ -52,10 +66,11 @@
   font-size: 15px;
   line-height: 1.5;
   color: var(--ink);
-  background: var(--mist);
+  background: #FFFFFF;
 
   -webkit-text-size-adjust: 100%;
 }
+
 
 
 
