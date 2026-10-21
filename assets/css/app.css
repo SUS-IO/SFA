@@ -423,3 +423,35 @@ textarea.input { padding: 10px 13px; line-height: 1.45; resize: vertical; min-he
 fieldset.freeze { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: inherit; }
 fieldset.freeze[disabled] { opacity: .6; pointer-events: none; }
 .draft-note { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+
+/* ---- Stage 10c: bento cards, sliders, GPS card, photo comparison, decks ---- */
+.sheet-panel.xl { width: min(1120px, 100%); }
+.bento { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.bento > .form-section, .bento > .bento-card { background: #fff; border: 1px solid var(--line); border-radius: var(--r-md); padding: 16px 18px; box-shadow: var(--shadow); align-content: start; min-width: 0; }
+.bento > .form-section:first-child { padding-top: 16px; border-top: 1px solid var(--line); }
+.bento > .span2 { grid-column: 1 / -1; }
+@media (max-width: 860px) { .bento { grid-template-columns: minmax(0, 1fr); } }
+.geo-card { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--mist, #f4f7fb); }
+.geo-line { margin: 0; font-size: 14px; } .geo-line.good { color: #1b7a43; font-weight: 700; } .geo-line.bad { color: #b3261e; font-weight: 700; } .geo-line.warn { color: #8a5a00; } .geo-line.wait { color: var(--ink-2); } .geo-line.addr { font-weight: 600; }
+.geo-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.cmp-grid { display: grid; gap: 12px; } .cmp-head, .cmp-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.cmp-head strong { font-size: 13px; color: var(--ink-2); } .cmp-old { display: grid; gap: 6px; } .cmp-old .tile { aspect-ratio: 4/3; cursor: zoom-in; }
+.cmp-old .tile.none { cursor: default; }
+.slider { display: grid; gap: 8px; outline: none; } .slider:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 10px; }
+.slider-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; gap: 8px; align-items: center; }
+.slider-nav { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: #fff; display: grid; place-items: center; cursor: pointer; }
+.slider-stage { display: grid; gap: 8px; } .slider-stage.panes-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.slider-pane { margin: 0; display: grid; gap: 4px; } .slider-pane figcaption { font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.slider-pane img { width: 100%; aspect-ratio: 4/3; object-fit: contain; background: #0e1b2a; border-radius: 10px; }
+.slider-none, .slider-wait { aspect-ratio: 4/3; display: grid; place-items: center; border-radius: 10px; background: var(--wash, #eef2f7); color: var(--ink-2); font-size: 13px; }
+.slider-cap { margin: 0; text-align: center; font-size: 13px; font-weight: 700; }
+.slider-thumbs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; } .slider-thumb { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; } .slider-thumb[aria-current="true"] { background: var(--navy, #102a43); color: #fff; border-color: transparent; }
+.deck { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+.card-item { display: grid; gap: 10px; align-content: start; padding: 14px 16px; background: #fff; border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow); }
+.card-item.mine { border-color: var(--blue); }
+.card-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; } .card-top strong { font-size: 15px; } .card-sub { display: grid; gap: 2px; color: var(--ink-2); font-size: 13px; } .card-sub b { color: var(--navy); }
+.card-actions { display: flex; gap: 8px; flex-wrap: wrap; } .card-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+.view-toggle { display: inline-flex; gap: 4px; }
+.seg { display: inline-flex; gap: 6px; } .card-item.clickable { cursor: pointer; } .card-item.clickable:hover, .card-item.clickable:focus-visible { border-color: var(--blue); outline: none; }
+.card-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; } .card-meta { display: flex; gap: 12px; flex-wrap: wrap; color: var(--ink-2); font-size: 13px; }
+.card-item .pay-act { display: flex; gap: 8px; flex-wrap: wrap; }
