@@ -177,7 +177,7 @@ export function openSheet({ title, subtitle, body, footer, wide = false, onClose
   };
   const bodyEl = h('div', { class: 'sheet-body' }, body);
   const footEl = footer ? h('div', { class: 'sheet-foot' }, footer) : null;
-  const panel = h('section', { class: `sheet-panel${wide ? ' wide' : ''}`, role: 'dialog', 'aria-modal': 'true', 'aria-label': title || 'Panel', tabindex: '-1' },
+  const panel = h('section', { class: `sheet-panel${wide ? ' wide' : ''}${wide === 'xl' ? ' xl' : ''}`, role: 'dialog', 'aria-modal': 'true', 'aria-label': title || 'Panel', tabindex: '-1' },
     h('header', { class: 'sheet-head' },
       h('div', { class: 'sheet-titles' }, h('h2', title || ''), subtitle ? h('p', subtitle) : null),
       h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close', on: { click: userClose } }, icon('x', 20))),

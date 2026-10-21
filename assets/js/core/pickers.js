@@ -291,6 +291,7 @@ export function vehiclePicker({ label = 'Vehicle', excludeId = null, onChange = 
     // reload the list for the current time. clear: also forget the chosen vehicle.
     refresh({ clear = false } = {}) { if (clear) { sel.value = ''; wanted = ''; } return load(); },
     clear() { sel.value = ''; wanted = ''; onChange?.(null); },
+    setDisabled(on) { sel.disabled = !!on; },
     want(id) { wanted = id ? String(id) : ''; if (wanted && [...sel.options].some(o => o.value === wanted && !o.disabled)) { sel.value = wanted; } },
   };
 }
