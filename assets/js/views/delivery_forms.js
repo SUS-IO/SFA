@@ -10,6 +10,9 @@ import { customerPicker, vehiclePicker, helmetChips, readyHelmets, conflictText 
 export { conflictText };
 import { multiPhotoField, photoField, photoPath, uploadPhoto } from '../core/images.js';
 import { loadDraft, saveDraft, clearDraft } from '../core/drafts.js';
+import { geoCapture } from '../core/geo.js';
+import { openCustomerView } from '../core/customer_view.js';
+import { oldPhotoCell } from '../core/slider.js';
 
 const MONEY = /^\d+(\.\d{1,2})?$/;
 const KM_LIMITS = [100, 150, 200, 250, 300, 400, 500];
@@ -56,7 +59,7 @@ function kmLimitField() {
 }
 
 const SET_SIDES = [['odometer', 'Odometer reading'], ['front', 'Front'], ['back', 'Rear'], ['left', 'Left side'], ['right', 'Right side']];
-function photoSet(title, { helmets = false, hint = 'The odometer photo and all four sides are required.', existing = null } = {}) {
+function photoSet(title, { helmets = false, hint = 'The odometer photo and all four sides are required.', existing = null, compare = null, compareTitles = ['Old photos (at handover)', 'New photos (now)'] } = {}) {
   const pf = Object.fromEntries(SET_SIDES.map(([k, l]) => [k, photoField({ label: l, required: true, existing: existing?.[k] || null })]));
   const extra = multiPhotoField({ label: 'Additional photos (optional)', max: 6, existing: existing?.extra || [] });
   const hel = helmets ? multiPhotoField({ label: 'Helmet photos', max: 6, existing: existing?.helmets || [] }) : null;
@@ -64,7 +67,9 @@ function photoSet(title, { helmets = false, hint = 'The odometer photo and all f
   const helErr = h('p', { class: 'field-error', hidden: true, role: 'alert' });
   let helNeeded = false;
   const el = h('section', { class: 'form-section' }, h('h3', title), h('p', { class: 'muted small' }, hint),
-    h('div', { class: 'photo-grid two' }, SET_SIDES.map(([k]) => pf[k].el)), extra.el,
+    compare ? h('div', { class: 'cmp-grid' }, h('div', { class: 'cmp-head' }, h('strong', compareTitles[0]), h('strong', compareTitles[1])),
+      SET_SIDES.map(([k, l]) => h('div', { class: 'cmp-row' }, h('div', { class: 'cmp-old' }, oldPhotoCell(compare[k], `${l} (old)`)), pf[k].el)))
+      : h('div', { class: 'photo-grid two' }, SET_SIDES.map(([k]) => pf[k].el)), extra.el,
     hel ? h('div', { class: 'stack-sm' }, hel.el, helNote, helErr) : null);
   const picked = (m) => m.kept().length + m.newItems().length;
   return {
@@ -297,22 +302,31 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, edit = null
   const secs = [];
   if (booking) secs.push(h('div', { class: 'callout' }, icon('info', 18), h('span', null, h('strong', `Booking ${booking.code}: `), h('span', { class: 'prewrap' }, [booking.booking_name || booking.booking_text || '', booking.booking_phone ? `, ${booking.booking_phone}` : '',
     booking.vehicle_number ? `. Booked vehicle ${booking.vehicle_number}` : '', booking.booking_days ? ` for ${booking.booking_days} day${booking.booking_days === 1 ? '' : 's'}` : '', booking.booking_note ? `. ${booking.booking_note}` : ''].join('')))));
-  secs.push(cust.el, custBox, vehicle.el, conflictBox, sectionBlock('Helmets', helmetSlot),
-    sectionBlock('Handover', h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'How is the vehicle handed over?'), handover), fPlace, lastLoc, fAddr, h('div', { class: 'grid-2' }, field('Handover time', at), fDays)),
+  const geo = isEdit ? null : geoCapture({ label: 'Where the handover happens (GPS, needed to save)', onAddress: (a, area) => { if (handover.get() === 'delivery' && !place.value.trim() && area) { place.value = area; place.dispatchEvent(new Event('input', { bubbles: true })); } } });
+  const span = (el) => { el.classList.add('span2'); return el; };
+  secs.push(h('div', { class: 'bento' },
+    sectionBlock('Customer', cust.el, custBox),
+    sectionBlock('Vehicle and helmets', vehicle.el, conflictBox, h('div', { class: 'stack-sm' }, helmetSlot)),
+    sectionBlock('Handover', h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'How is the vehicle handed over?'), handover), fPlace, lastLoc, fAddr, h('div', { class: 'grid-2' }, field('Handover time', at), fDays), geo?.el),
     sectionBlock('Charges', fTrip, h('div', { class: 'stack-sm' }, fRent, rentNote), fPref, h('div', { class: 'grid-2' }, fDep, fDch), h('div', { class: 'grid-2' }, fApc), total,
       h('div', { class: 'grid-2' }, field('Other charge for', ot), fOa)),
-    sectionBlock('Kilometres', km.el, h('div', { class: 'grid-2' }, fX, fOdo)), photos.el, field('Note', note), pay.el, billEl);
+    sectionBlock('Kilometres', km.el, h('div', { class: 'grid-2' }, fX, fOdo)),
+    sectionBlock('Note', field('Note', note)),
+    span(photos.el), span(pay.el)), billEl);
   paintMode();
 
   // ---- customer: an approver can approve a waiting customer right here (the customer comes first, then the delivery)
   function paintCust(c) {
-    if (!c || c.status !== 'pending') { mount(custBox); return; }
+    if (!c) { mount(custBox); return; }
+    const viewBtn = btn('View customer details', { small: true, ic: 'eye', onClick: () => openCustomerView(c.id, { onChange: () => paintCustRefresh(c.id) }) });
+    if (c.status !== 'pending') { mount(custBox, viewBtn); return; }
     const approveNow = btn('Approve this customer now', { kind: 'primary', small: true, ic: 'check', onClick: async () => {
       const ok = await confirmDialog({ title: `Approve ${c.name}?`, message: 'Check the customer\'s photos and details first. Once approved, this customer can rent vehicles.', confirmLabel: 'Approve' });
       if (!ok) return;
       try { const { data, error } = await sb.from('customers').update({ status: 'active' }).eq('id', c.id).select('id,name,mobile,status,customer_type,customer_image').single(); if (error) throw error; toast('Customer approved'); cust.set(data); } catch (e) { toast(friendlyError(e), 'error'); } } });
-    mount(custBox, h('div', { class: 'callout' }, icon('info', 18), h('span', null, `${c.name} is waiting for approval. The customer must be approved before this delivery can be approved. `), can.approve() ? approveNow : null));
+    mount(custBox, viewBtn, h('div', { class: 'callout' }, icon('info', 18), h('span', null, `${c.name} is waiting for approval. The customer must be approved before this delivery can be approved. `), can.approve() ? approveNow : null));
   }
+  async function paintCustRefresh(id) { try { const { data } = await sb.from('customers').select('id,name,mobile,status,customer_type,customer_image').eq('id', id).maybeSingle(); if (data) cust.set(data); } catch { /* keep as is */ } }
 
   // ---- values for editing, and the draft kept on this device
   const setSeg = (w, v) => { w.dataset.value = v; [...w.children].forEach(b => b.setAttribute('aria-checked', String(b.dataset.v === v))); };
@@ -375,12 +389,14 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, edit = null
         checkFailed = false; const c = await checkConflict();
         if (checkFailed) { toast('Could not check whether the vehicle is locked. Check your connection and try again.', 'error'); return; }
         if (c) { toast('This vehicle is locked for those dates. Choose another vehicle.', 'error'); return; }
+        const gp = isEdit ? null : await geo.ensure();
+        if (!isEdit && !gp) return;
         const folder = `deliveries/${folderId()}`;
         const payments = await pay.collect(`${folder}/receipts`);
         const photo_set = await photos.collect(folder, 'vehicle');
         const body = { customer_id: cust.value().id, vehicle_id: vehicle.value().id, helmet_ids: helmets ? helmets.values() : [], handover_mode: handover.get(), delivery_place: handover.get() === 'delivery' ? place.value.trim() : '', current_address: addr.value.trim(), delivered_at: isoFromLocal(at.value),
           days: days.value.trim(), trip_type: trip.value, rent_per_day: rent.value.trim(), preferred_return_at: pref.value ? isoFromLocal(pref.value) : '', deposit: dep.value.trim(), delivery_charges: dch.value.trim(), advance_pickup_charges: apc.value.trim(),
-          km_limit_per_day: km.value(), extra_km_rate: xrate.value.trim(), odometer_out: odo.value.trim(), other_charges_text: ot.value, other_charges_amount: oa.value.trim(), note: note.value, photo_set, payments };
+          km_limit_per_day: km.value(), extra_km_rate: xrate.value.trim(), odometer_out: odo.value.trim(), other_charges_text: ot.value, other_charges_amount: oa.value.trim(), note: note.value, photo_set, payments, ...(gp || {}) };
         let id;
         if (isEdit) {
           const { payments: _p, ...rest } = body;
@@ -398,7 +414,7 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, edit = null
   } } }, secs));
   const saveSoon = debounce(() => { if (!sv.guard() && !discarded) saveDraft(draftKey, collectDraft()); }, 500);
   ['input', 'change', 'click'].forEach(ev => form.addEventListener(ev, saveSoon));
-  s = openSheet({ title: isEdit ? 'Edit delivery' : booking ? 'Hand over booking' : 'New delivery', subtitle: d0?.code || booking?.code, body: form, footer: [cancel, submit], wide: true, guard: sv.guard });
+  s = openSheet({ title: isEdit ? 'Edit delivery' : booking ? 'Hand over booking' : 'New delivery', subtitle: d0?.code || booking?.code, body: form, footer: [cancel, submit], wide: 'xl', guard: sv.guard });
   readyHelmets(helmetIds).then(items => { helmets = helmetChips({ label: 'Helmets given', items, checked: helmetIds, hint: 'Only helmets at an Office are listed.' }); mount(helmetSlot, helmets.el); })
     .catch(() => { helmets = { values: () => [] }; mount(helmetSlot, h('p', { class: 'muted small' }, 'Could not load helmets.')); });
   return s;
@@ -430,57 +446,104 @@ export function openExtendForm({ delivery, onDone }) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// "Where did it happen": we went to the customer, or the customer came to the Office. Plus the GPS position, which is needed to save.
+function whereBlock({ question, optDelivery, optOffice, placeLabel, placeholder, defaultOfficeId = null, geoLabel = 'Where you are now (GPS, needed to save)' }) {
+  const offices = state.locations.filter(l => l.type === 'Office' && l.active);
+  const mode = segmented([{ value: 'delivery', label: optDelivery }, { value: 'office', label: optOffice }], 'delivery', () => paint());
+  const place = input({ placeholder }); const fPlace = field(placeLabel, place, { required: true, hint: 'The area is filled from your GPS position. You can change it.' });
+  const officeSel = select(offices.map(l => ({ value: String(l.id), label: l.name })), { value: String(defaultOfficeId || offices[0]?.id || '') }); const fOffice = field('Which Office', officeSel, { required: true });
+  const geo = geoCapture({ label: geoLabel, onAddress: (a, area) => { if (mode.get() === 'delivery' && !place.value.trim() && area) place.value = area; } });
+  function paint() { const off = mode.get() === 'office'; fPlace.hidden = off; fOffice.hidden = !off; fPlace.setError(''); fOffice.setError(''); }
+  paint();
+  return {
+    els: [h('div', { class: 'field' }, h('span', { class: 'field-label' }, question), mode), fPlace, fOffice, geo.el], geo, mode: () => mode.get(),
+    placeText: () => (mode.get() === 'office' ? (offices.find(l => String(l.id) === officeSel.value)?.name || '') : place.value.trim()),
+    validate() { if (mode.get() === 'delivery' && !place.value.trim()) { fPlace.setError('Type the location or area.'); return false; } if (mode.get() === 'office' && !officeSel.value) { fOffice.setError('Choose the Office.'); return false; } return true; },
+  };
+}
+const bentoOf = (...cards) => h('div', { class: 'bento' }, cards);
+const wideCard = (el) => { el.classList.add('span2'); return el; };
+const dueWindow = (delivery) => () => { const now = new Date(); return { from: now, to: new Date(Math.max(new Date(delivery.return_due).getTime() || 0, now.getTime() + 3600000)), exclude: delivery.id }; };
+
+// ---------------------------------------------------------------------------------------------
+// Tele Caller and above: choose WHO does the swap and WHICH vehicle will be given.
 export function openAssignSwap({ delivery, onDone }) {
+  if (!can.assignSwap()) { toast('Only a Tele Caller or above can assign a swap.', 'error'); return null; }
   const who = select(userOptions({ blank: true })); const fWho = field('Who will do the swap', who, { required: true });
+  const nv = vehiclePicker({ label: 'Vehicle to give the customer', excludeId: delivery.vehicle_id, window: dueWindow(delivery) });
   const why = textarea({ rows: '3', placeholder: 'Why the vehicle is being swapped, for example puncture or breakdown' });
   const formId = 'asg-form'; const submit = submitBtn('Assign swap', formId);
   const cancel = btn('Cancel', { onClick: () => s.close() }); const sv = formSaver(submit, cancel);
   const form = sv.attach(h('form', { id: formId, class: 'stack', novalidate: true, on: { submit: (ev) => { ev.preventDefault();
-    if (!who.value) return fWho.setError('Choose a person.');
-    sv.run(async () => { try { await rpc('assign_swap', { p_delivery: delivery.id, p_assigned_to: who.value, p_reason: why.value }); toast('Swap assigned'); s.close(); onDone?.(); }
-      catch (e) { fWho.setError(friendlyError(e)); } });
-  } } }, h('p', { class: 'muted' }, 'The person you choose will do the swap and add the details. An approver then reviews and confirms it.'), fWho, field('Reason', why)));
-  const s = openSheet({ title: 'Assign a swap', subtitle: delivery.code, body: form, footer: [cancel, submit], guard: sv.guard });
+    let ok = true; if (!who.value) { fWho.setError('Choose a person.'); ok = false; } else fWho.setError(''); if (!nv.value()) { nv.setError('Choose the vehicle that will be given.'); ok = false; }
+    if (!ok) return;
+    sv.run(async () => { try { await rpc('assign_swap_with_vehicle', { p_delivery: delivery.id, p_assigned_to: who.value, p_new_vehicle: nv.value().id, p_reason: why.value }); toast('Swap assigned'); s.close(); onDone?.(); }
+      catch (e) { toast(friendlyError(e), 'error'); } });
+  } } }, h('p', { class: 'muted' }, 'Choose the person who will do the swap and the exact vehicle they will give. Only vehicles that are free are listed. A Tele Caller or above can still change the vehicle later.'),
+    bentoOf(sectionBlock('Person', fWho), sectionBlock('Vehicle', nv.el), wideCard(sectionBlock('Reason', field('Reason', why))))));
+  const s = openSheet({ title: 'Assign a swap', subtitle: delivery.code, body: form, footer: [cancel, submit], wide: true, guard: sv.guard });
+  return s;
+}
+
+// Tele Caller and above: change the vehicle of a swap that is still waiting to be done.
+export function openChangeSwapVehicle({ swap, delivery, onDone }) {
+  const nv = vehiclePicker({ label: 'New vehicle to give', excludeId: delivery.vehicle_id, selectId: swap.planned_vehicle_id || null, window: dueWindow(delivery) });
+  const formId = 'csv-form'; const submit = submitBtn('Change vehicle', formId);
+  const cancel = btn('Cancel', { onClick: () => s.close() }); const sv = formSaver(submit, cancel);
+  const form = sv.attach(h('form', { id: formId, class: 'stack', novalidate: true, on: { submit: (ev) => { ev.preventDefault();
+    if (!nv.value()) return nv.setError('Choose a vehicle.');
+    sv.run(async () => { try { await rpc('change_swap_vehicle', { p_swap: swap.id, p_new_vehicle: nv.value().id }); toast('Vehicle changed'); s.close(); onDone?.(); } catch (e) { toast(friendlyError(e), 'error'); } });
+  } } }, nv.el));
+  const s = openSheet({ title: 'Change the swap vehicle', subtitle: delivery.code, body: form, footer: [cancel, submit], guard: sv.guard });
+  return s;
 }
 
 export function openDoSwap({ swap, delivery, onDone }) {
-  const nv = vehiclePicker({ label: 'New vehicle', excludeId: delivery.vehicle_id });
-  const place = input({ placeholder: 'Area or place where the swap happens' }); const fPlace = field('Swap location / area', place, { required: true, hint: 'Type it. Nothing is filled in for you.' });
+  const planned = swap.planned_vehicle_id || null; const locked = !!planned && !can.assignSwap();
+  const nv = vehiclePicker({ label: 'Vehicle given to the customer', excludeId: delivery.vehicle_id, selectId: planned, window: dueWindow(delivery) });
+  if (locked) nv.setDisabled(true);
+  const where = whereBlock({ question: 'Where did the swap happen?', optDelivery: 'We went to the customer', optOffice: 'The customer came to the Office', placeLabel: 'Swap location / area', placeholder: 'Area or place where the swap happens', defaultOfficeId: delivery.from_location_id, geoLabel: 'Where the swap happens (GPS, needed to save)' });
   const addr = textarea({ rows: '2', placeholder: 'Where the customer is staying now' }); const fAddr = field('Customer\'s current address', addr, { required: true });
   const same = btn('Same as at delivery', { ic: 'copy', small: true, onClick: () => { addr.value = delivery.current_address || ''; if (!delivery.current_address) toast('No address was recorded at delivery.', 'error'); fAddr.setError(''); } });
   const oin = wholeInput(); const fIn = field('Old vehicle reading now', oin, { required: true, hint: `It left at ${delivery.odometer_out} km.` });
   const onew = wholeInput(); const fNew = field('New vehicle reading', onew, { required: true });
-  const outP = sidePhotos('Old bike received back from the customer'); const inP = sidePhotos('New bike given to the customer');
+  const outP = photoSet('Old bike received back from the customer', { compare: delivery.photo_set || {}, compareTitles: ['Old: photos at handover', 'New: photos now'] }); const inP = sidePhotos('New bike given to the customer');
   const note = textarea({ rows: '2' });
   const pay = paymentsEditor({ title: 'Payment received for the swap (optional)', purposes: ['Swap charge'], first: 'Swap charge' });
   const formId = 'swp-form'; const submit = submitBtn('Send for approval', formId);
   const cancel = btn('Cancel', { onClick: () => s.close() }); const sv = formSaver(submit, cancel);
   const form = sv.attach(h('form', { id: formId, class: 'stack', novalidate: true, on: { submit: (ev) => { ev.preventDefault();
     let ok = true; if (!nv.value()) { nv.setError('Choose the new vehicle.'); ok = false; }
-    if (!place.value.trim()) { fPlace.setError('Type the swap location or area.'); ok = false; } else fPlace.setError('');
+    if (!where.validate()) ok = false;
     if (!addr.value.trim()) { fAddr.setError('Enter the current address.'); ok = false; } else fAddr.setError('');
     ok = checkWhole(fIn, oin, { label: 'the reading' }) && ok; ok = checkWhole(fNew, onew, { label: 'the reading' }) && ok;
     if (!outP.validate()) ok = false; if (!inP.validate()) ok = false; if (!pay.validate()) ok = false;
     if (!ok) { form.querySelector('.has-error, .field-error:not([hidden])')?.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
     sv.run(async () => { try {
+      const gp = await where.geo.ensure(); if (!gp) return;
       const folder = `swaps/${folderId()}`; const payments = await pay.collect(`${folder}/receipts`);
       const photos_old = await outP.collect(folder, 'old'); const photos_new = await inP.collect(folder, 'new');
-      await rpc('do_swap', { p_id: swap.id, p: { new_vehicle_id: nv.value().id, swap_place: place.value.trim(), current_address: addr.value.trim(), odometer_in_old: oin.value.trim(), odometer_out_new: onew.value.trim(), photos_old, photos_new, note: note.value, payments } });
+      await rpc('do_swap', { p_id: swap.id, p: { new_vehicle_id: nv.value().id, handover_mode: where.mode(), swap_place: where.placeText(), current_address: addr.value.trim(), odometer_in_old: oin.value.trim(), odometer_out_new: onew.value.trim(), photos_old, photos_new, note: note.value, payments, ...gp } });
       toast('Swap saved. Both vehicles now wait for approval.'); s.close(); onDone?.();
     } catch (e) { toast(friendlyError(e), 'error'); } });
-  } } }, nv.el, fPlace, h('div', { class: 'stack-sm' }, fAddr, same), h('div', { class: 'grid-2' }, fIn, fNew), outP.el, inP.el, field('Note', note), pay.el));
-  const s = openSheet({ title: 'Do the swap', subtitle: `${delivery.code}${swap.reason ? `, ${swap.reason}` : ''}`, body: form, footer: [cancel, submit], wide: true, guard: sv.guard });
+  } } }, planned ? h('div', { class: 'callout' }, icon('info', 18), h('span', locked ? 'The vehicle for this swap was chosen when it was assigned. Only a Tele Caller or above can change it.' : 'The vehicle for this swap was chosen when it was assigned. You can change it.')) : null,
+    bentoOf(sectionBlock('Vehicle', nv.el), sectionBlock('Readings', h('div', { class: 'grid-2' }, fIn, fNew)),
+      sectionBlock('Where', ...where.els, h('div', { class: 'stack-sm' }, fAddr, same)), sectionBlock('Note', field('Note', note)),
+      wideCard(outP.el), wideCard(inP.el), wideCard(pay.el))));
+  const s = openSheet({ title: 'Do the swap', subtitle: `${delivery.code}${swap.reason ? `, ${swap.reason}` : ''}`, body: form, footer: [cancel, submit], wide: 'xl', guard: sv.guard });
+  return s;
 }
 
 // ---------------------------------------------------------------------------------------------
 export function openPickupForm({ delivery, rentalDays, helmetsOut, due = 0, onDone }) {
-  const place = input({ placeholder: 'Area or place where the vehicle was picked up' }); const fPlace = field('Pickup location / area', place, { required: true, hint: 'Type it. Nothing is filled in for you.' });
+  const where = whereBlock({ question: 'How did the vehicle come back?', optDelivery: 'We picked it up from the customer', optOffice: 'The customer brought it to the Office', placeLabel: 'Pickup location / area', placeholder: 'Area or place where the vehicle was picked up', defaultOfficeId: delivery.from_location_id, geoLabel: 'Where the pickup happens (GPS, needed to save)' });
   const at = input({ type: 'datetime-local', value: localInputValue() });
   const odo = wholeInput(); const fOdo = field('Odometer reading now', odo, { required: true, hint: `It was ${delivery.odometer_out} km when it went out.` });
   const hel = helmetChips({ label: 'Helmets returned', items: helmetsOut.map(x => ({ id: x.helmet_id, code: x.code })), checked: helmetsOut.map(x => x.helmet_id), hint: 'Untick any helmet that was not returned.' });
   const calc = h('div', { class: 'total-box' });
   const ot = input({ placeholder: 'For example Scratch on tank' }); const oa = moneyInput(); const fOa = field('Other charge amount', oa);
-  const cond = textarea({ rows: '2', placeholder: 'Condition of the vehicle' }); const photos = photoSet('Vehicle photos at return', { helmets: true });
+  const cond = textarea({ rows: '2', placeholder: 'Condition of the vehicle' });
+  const photos = photoSet('Vehicle photos at return', { helmets: true, compare: delivery.photo_set || {}, compareTitles: ['Old: photos at handover', 'New: photos at return'] });
   const refund = moneyInput(); const fRef = field('Deposit refund now (optional)', refund, { hint: `Deposit taken: ${fmtMoney(delivery.deposit)}. No cash right now? Leave it empty and refund later from the delivery.` });
   const refVia = select(VIAS.map(v => ({ value: v, label: v }))); const refHolder = select(userOptions({ blank: true }), { value: state.me.id }); const fRefHolder = field('Cash paid out by', refHolder, { hint: 'The person who hands over the cash.' });
   const refPhoto = photoField({ label: 'Refund receipt photo' }); const fRefPhoto = h('div', { class: 'stack-sm' }, refPhoto.el);
@@ -505,7 +568,7 @@ export function openPickupForm({ delivery, rentalDays, helmetsOut, due = 0, onDo
   const formId = 'pk-form'; const submit = submitBtn('Send for approval', formId);
   const cancel = btn('Cancel', { onClick: () => s.close() }); const sv = formSaver(submit, cancel);
   const form = sv.attach(h('form', { id: formId, class: 'stack', novalidate: true, on: { submit: (ev) => { ev.preventDefault();
-    let ok = true; if (!place.value.trim()) { fPlace.setError('Type the pickup location or area.'); ok = false; } else fPlace.setError('');
+    let ok = where.validate();
     ok = checkWhole(fOdo, odo, { label: 'the reading' }) && ok; ok = checkMoney(fOa, oa) && ok; ok = checkMoney(fRef, refund) && ok;
     if (num(oa.value) > 0 && !ot.value.trim()) { fOa.setError('Say what the other charge is for.'); ok = false; }
     if (num(refund.value) > num(delivery.deposit)) { fRef.setError(`The refund cannot be more than the deposit (${fmtMoney(delivery.deposit)}).`); ok = false; }
@@ -514,18 +577,24 @@ export function openPickupForm({ delivery, rentalDays, helmetsOut, due = 0, onDo
     photos.setHelmetsNeeded(hel.values().length > 0); if (!photos.validate()) ok = false;
     if (!pay.validate()) ok = false; if (!ok) { form.querySelector('.has-error, .field-error:not([hidden])')?.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
     sv.run(async () => { try {
+      const gp = await where.geo.ensure(); if (!gp) return;
       const folder = `pickups/${folderId()}`; const payments = await pay.collect(`${folder}/receipts`); const photoPaths = await photos.collect(folder, 'return');
       let refundReceipt = null; const rp = refPhoto.picked(); if (num(refund.value) > 0 && rp) refundReceipt = await uploadPhoto(photoPath(folder, 'refund', rp.type), rp.blob);
-      await rpc('create_pickup', { p_delivery: delivery.id, p: { return_place: place.value.trim(), returned_at: isoFromLocal(at.value), odometer_in: odo.value.trim(), helmet_ids: hel.values(),
+      await rpc('create_pickup', { p_delivery: delivery.id, p: { handover_mode: where.mode(), return_place: where.placeText(), ...gp, returned_at: isoFromLocal(at.value), odometer_in: odo.value.trim(), helmet_ids: hel.values(),
         other_charges_text: ot.value, other_charges_amount: oa.value.trim(), condition_note: cond.value, photos: photoPaths, payments,
         refund_amount: num(refund.value) > 0 ? String(num(refund.value)) : '', refund_via: refVia.value, refund_receipt: refundReceipt, refund_cash_user: refVia.value === 'Cash' ? refHolder.value : null } });
       toast('Pickup saved. It waits for approval.'); s.close(); onDone?.();
     } catch (e) { toast(friendlyError(e), 'error'); } });
-  } } }, h('div', { class: 'grid-2' }, fPlace, field('Return time', at)), fOdo, calc, hel.el,
-    sectionBlock('Other charges', h('div', { class: 'grid-2' }, field('Other charge for', ot), fOa)), field('Condition', cond), photos.el, pay.el,
-    sectionBlock('Deposit refund', h('div', { class: 'grid-2' }, fRef, field('Paid by', refVia)), fRefHolder, fRefPhoto, h('p', { class: 'muted small' }, 'Saved as an expense for this delivery. You can also refund later from the delivery.'))));
+  } } }, bentoOf(
+    sectionBlock('Where and when', ...where.els, field('Return time', at)),
+    sectionBlock('Kilometres', fOdo, calc),
+    sectionBlock('Helmets and condition', hel.el, field('Condition', cond)),
+    sectionBlock('Other charges', h('div', { class: 'grid-2' }, field('Other charge for', ot), fOa)),
+    wideCard(photos.el), wideCard(pay.el),
+    wideCard(sectionBlock('Deposit refund', h('div', { class: 'grid-2' }, fRef, field('Paid by', refVia)), fRefHolder, fRefPhoto, h('p', { class: 'muted small' }, 'Saved as an expense for this delivery. You can also refund later from the delivery.'))))));
   refVia.dispatchEvent(new Event('change'));
-  const s = openSheet({ title: 'Pick up the vehicle', subtitle: delivery.code, body: form, footer: [cancel, submit], wide: true, guard: sv.guard });
+  const s = openSheet({ title: 'Pick up the vehicle', subtitle: delivery.code, body: form, footer: [cancel, submit], wide: 'xl', guard: sv.guard });
+  return s;
 }
 
 // ---------------------------------------------------------------------------------------------

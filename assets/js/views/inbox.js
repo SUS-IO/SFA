@@ -6,6 +6,7 @@ import { signed, acknowledgeMoney, disputeMoney, acknowledgeTransfer, disputeTra
 import { openDeliveryDetail } from './deliveries.js';
 import { signedUrls, lightbox } from '../core/images.js';
 import { fmtDateTimeY } from '../core/ui.js';
+import { openCustomerView } from '../core/customer_view.js';
 
 
 // Full details of a payment or a handover, so the person can check everything before acknowledging or approving.
@@ -33,7 +34,7 @@ export async function render(root) {
     const codes = new Map(); if (ids.length) (await sb.from('deliveries').select('id,code').in('id', ids)).data?.forEach(d => codes.set(d.id, d.code));
     const open = (id) => openDeliveryDetail(id, { onChange: draw }); const me = state.me.id;
     const link = (id) => (id ? h('a', { href: `#/deliveries?open=${id}`, on: { click: (e) => { e.preventDefault(); open(id); } } }, codes.get(id) || 'delivery') : null);
-    const li = (main, sub, acts) => h('li', { class: 'todo-row' }, h('div', { class: 'todo-main' }, h('strong', main), h('small', sub)), h('div', { class: 'pay-act' }, acts));
+    const li = (main, sub, acts) => h('article', { class: 'card-item' }, h('div', { class: 'todo-main' }, h('strong', main), h('small', sub)), h('div', { class: 'pay-act' }, acts));
     const approveFn = (fn, id, what) => confirmDialog({ title: `Approve this ${what}?`, message: 'Its payments are approved with it.', confirmLabel: 'Approve' }).then(async (r) => { if (!r) return; try { await rpc(fn, { p_id: id }); toast('Approved'); draw(); } catch (e) { toast(friendlyError(e), 'error'); } });
     const okToApprove = () => true;
     const sec = (title, n, body) => h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', title), n ? h('span', { class: 'count-pill' }, String(n)) : null), body);
@@ -44,8 +45,8 @@ export async function render(root) {
     const swaps = t.mySwaps.map(w => li(`Swap for ${codes.get(w.delivery_id) || 'a delivery'}`, `Assigned by ${whoName(w.assigned_by)}${w.reason ? `. ${w.reason}` : ''}`, [btn('Open', { small: true, kind: 'primary', onClick: () => open(w.delivery_id) })]));
     const A = t.approvals;
     const appr = [
-      ...A.bookings.map(d => li(`Booking ${d.code}`, `${d.booking_name || (d.booking_text || '').split('\n')[0]} · added by ${whoName(d.created_by)}`, [btn('Open', { small: true, onClick: () => open(d.id) }), btn('Approve', { small: true, kind: 'primary', onClick: () => approveFn('approve_booking', d.id, 'booking') })])),
-      ...A.deliveries.map(d => li(`Delivery ${d.code}${d.reviewed_at ? ' (reviewed, confirm handover)' : ' (review details)'}`, `Added by ${whoName(d.created_by)} on ${fmtDateTime(d.created_at)}`, [btn(d.reviewed_at ? 'Open to confirm' : 'Open to review', { small: true, kind: 'primary', onClick: () => open(d.id) })])),
+      ...A.bookings.map(d => li(`Booking ${d.code}`, `${d.booking_name || (d.booking_text || '').split('\n')[0]} · added by ${whoName(d.created_by)}`, [d.customer_id ? btn('Customer', { small: true, ic: 'eye', onClick: () => openCustomerView(d.customer_id, { onChange: draw }) }) : null, btn('Open', { small: true, onClick: () => open(d.id) }), btn('Approve', { small: true, kind: 'primary', onClick: () => approveFn('approve_booking', d.id, 'booking') })])),
+      ...A.deliveries.map(d => li(`Delivery ${d.code}${d.reviewed_at ? ' (reviewed, confirm handover)' : ' (review details)'}`, `Added by ${whoName(d.created_by)} on ${fmtDateTime(d.created_at)}`, [d.customer_id ? btn('Customer', { small: true, ic: 'eye', onClick: () => openCustomerView(d.customer_id, { onChange: draw }) }) : null, btn(d.reviewed_at ? 'Open to confirm' : 'Open to review', { small: true, kind: 'primary', onClick: () => open(d.id) })])),
       ...A.replacements.map(r => li('Vehicle replacement for a booking', [link(r.booking_id), ` · requested by ${whoName(r.created_by)}${r.reason ? `. ${r.reason}` : ''}`],
         [btn('Open', { small: true, onClick: () => open(r.booking_id) }), btn('Approve', { small: true, kind: 'primary', onClick: () => approveFn('approve_booking_replacement', r.id, 'vehicle replacement') }),
           btn('Reject', { small: true, onClick: () => confirmDialog({ title: 'Reject this request?', message: 'The booking keeps its current vehicle.', confirmLabel: 'Reject' }).then(async (ok) => { if (!ok) return; try { await rpc('close_booking_replacement', { p_id: r.id, p_action: 'reject', p_note: null }); toast('Rejected'); draw(); } catch (e) { toast(friendlyError(e), 'error'); } }) })])),
@@ -58,11 +59,11 @@ export async function render(root) {
     const none = (msg) => h('div', { class: 'allclear' }, icon('check', 20), h('span', msg));
     mount(root, h('div', { class: 'page-head' }, h('div', null, h('h1', 'To do'), h('p', { class: 'muted' }, 'Everything waiting for you.'))),
       h('div', { class: 'dash-grid' }, h('div', { class: 'dash-col' },
-        sec('Cash to acknowledge', ack.length, ack.length ? h('ul', { class: 'work-list' }, ack) : none('No cash is waiting for you to confirm.')),
-        sec('Swaps assigned to you', swaps.length, swaps.length ? h('ul', { class: 'work-list' }, swaps) : none('No swaps assigned to you.'))),
+        sec('Cash to acknowledge', ack.length, ack.length ? h('div', { class: 'deck' }, ack) : none('No cash is waiting for you to confirm.')),
+        sec('Swaps assigned to you', swaps.length, swaps.length ? h('div', { class: 'deck' }, swaps) : none('No swaps assigned to you.'))),
         h('div', { class: 'dash-col' },
-          can.approve() ? sec('Waiting for your approval', appr.length, appr.length ? h('ul', { class: 'work-list' }, appr) : none('Nothing is waiting for approval.')) : null,
-          t.overdue.length ? sec('Overdue returns', t.overdue.length, h('ul', { class: 'work-list' }, t.overdue.slice(0, 12).map(d => li(d.code, `Was due ${fmtDateTime(d.return_due)}`, btn('Open', { small: true, onClick: () => open(d.id) }))))) : null)));
+          can.approve() ? sec('Waiting for your approval', appr.length, appr.length ? h('div', { class: 'deck' }, appr) : none('Nothing is waiting for approval.')) : null,
+          t.overdue.length ? sec('Overdue returns', t.overdue.length, h('div', { class: 'deck' }, t.overdue.slice(0, 12).map(d => li(d.code, `Was due ${fmtDateTime(d.return_due)}`, btn('Open', { small: true, onClick: () => open(d.id) }))))) : null)));
   }
   await draw();
 }

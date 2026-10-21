@@ -6,7 +6,10 @@ import { state, can, whoName, loc, model } from '../core/store.js';
 import { signedUrls, lightbox } from '../core/images.js';
 import { summaryTable, deliverySummary } from '../core/payments.js';
 import { deliveryChip, DELIVERY_LABEL, moneyChip, signed, acknowledgeMoney, disputeMoney, voidMoney, approveMoney } from '../core/ops.js';
-import { openDeliveryForm, openBookingForm, openReplaceBooking, conflictText, openExtendForm, openAssignSwap, openDoSwap, openPickupForm, openMoneyForm } from './delivery_forms.js';
+import { openDeliveryForm, openBookingForm, openReplaceBooking, conflictText, openExtendForm, openAssignSwap, openChangeSwapVehicle, openDoSwap, openPickupForm, openMoneyForm } from './delivery_forms.js';
+import { photoSlider, compareSlider } from '../core/slider.js';
+import { openCustomerView } from '../core/customer_view.js';
+import { mapsUrl } from '../core/geo.js';
 
 const PAGE = 40;
 const COLS = 'id,code,status,customer_id,vehicle_id,model_id,booking_for,booking_text,booking_name,booking_phone,booking_vehicle_id,booking_days,delivered_at,return_due,days,created_by,created_at,approved_at,reviewed_at';
@@ -24,16 +27,8 @@ const overdue = (d) => d.status === 'active' && d.return_due && new Date(d.retur
 
 // ---- photo sets: labelled thumbnails (also reads older records that have fewer photos) ----------
 const SET_LABEL = { odometer: 'Odometer', front: 'Front', back: 'Rear', left: 'Left side', right: 'Right side' };
-export function photoSetView(set, title) {
-  if (!set || typeof set !== 'object') return null;
-  const items = [];
-  for (const k of ['odometer', 'front', 'back', 'left', 'right']) if (set[k]) items.push([set[k], SET_LABEL[k]]);
-  (set.extra || []).forEach((p, i) => items.push([p, `Additional ${i + 1}`]));
-  (set.helmets || []).forEach((p, i) => items.push([p, `Helmet ${i + 1}`]));
-  if (!items.length) return null;
-  return h('div', { class: 'swap-photos' }, h('strong', title), h('div', { class: 'photo-multi viewer' }, items.map(([path, label]) =>
-    h('div', { class: 'tile filled', dataset: { path, cap: `${title}: ${label}` } }, icon('image', 22), h('span', { class: 'thumb-label' }, label)))));
-}
+export function photoSetView(set, title) { return photoSlider(set, title); }
+export const geoLine = (o) => (o && o.geo_lat != null ? h('span', null, o.geo_address ? `${o.geo_address} ` : 'Location recorded ', h('a', { href: mapsUrl(o.geo_lat, o.geo_lng), target: '_blank', rel: 'noopener' }, '(open map)')) : null);
 export function hydrateTiles(root, code) {
   const tiles = [...root.querySelectorAll('.tile[data-path]')]; const paths = tiles.map(t => t.dataset.path).filter(Boolean);
   if (!paths.length) return;
@@ -78,6 +73,16 @@ export async function render(root, params) {
     st.loading = false; paint();
   }
   const cust = (d) => st.maps.customers.get(d.customer_id), veh = (d) => st.maps.vehicles.get(d.vehicle_id || d.booking_vehicle_id);
+  let viewMode = 'cards'; try { viewMode = localStorage.getItem('sfa-dl-view') || 'cards'; } catch {}
+  const viewBtns = h('div', { class: 'seg', role: 'group', 'aria-label': 'Show as' }, [['cards', 'Cards'], ['table', 'Table']].map(([v, l]) =>
+    h('button', { type: 'button', class: 'fchip', dataset: { v }, 'aria-pressed': String(viewMode === v), on: { click: () => { viewMode = v; try { localStorage.setItem('sfa-dl-view', v); } catch {} viewBtns.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === viewMode))); paint(); } } }, l)));
+  const cardOf = (d) => { const c = cust(d), v = veh(d);
+    return h('article', { class: 'card-item clickable', tabindex: '0', on: { click: () => openDetail(d.id), keydown: (e) => { if (e.key === 'Enter') openDetail(d.id); } } },
+      h('div', { class: 'card-top' }, h('strong', { class: 'code' }, d.code), h('span', null, deliveryChip(d.status), overdue(d) ? chip('Overdue', 'pink', 'clock') : null)),
+      h('div', null, h('strong', c ? c.name : (d.booking_name || (d.booking_text || '').split('\n')[0] || 'No customer yet')), c ? h('small', { class: 'cell-note' }, fmtPhone(c.mobile)) : null),
+      h('div', { class: 'card-meta' }, v ? h('span', null, icon('bike', 14), ` ${v.number}`) : null,
+        h('span', null, ['booked', 'booking_pending'].includes(d.status) ? `Planned ${fmtDateTime(d.booking_for)}` : d.return_due ? `Return ${fmtDateTime(d.return_due)}` : fmtDateTime(d.delivered_at || d.created_at))));
+  };
   const table = dataTable({
     storageKey: 'deliveries', defaultSort: { key: 'date', dir: 'desc' }, empty: 'Nothing to show.',
     serverKeys: { date: 'created_at', status: 'status', due: 'return_due' },
@@ -94,14 +99,15 @@ export async function render(root, params) {
     countEl.textContent = st.total ? `${st.total} deliver${st.total === 1 ? 'y' : 'ies'}` : '';
     table.setServerMode(!st.q);
     if (!st.items.length) { mount(list, st.q || st.status !== 'all' ? emptyState('No deliveries match', 'Try a different search or filter.') : emptyState('No deliveries yet', 'Start with a new delivery, or save a booking to hand over later.', btn('New delivery', { kind: 'primary', ic: 'plus', onClick: () => openNew('deliver') }))); moreWrap.replaceChildren(); return; }
-    table.setRows(st.items); mount(list, table.el);
+    if (viewMode === 'cards') mount(list, h('div', { class: 'deck' }, st.items.map(cardOf)));
+    else { table.setRows(st.items); mount(list, table.el); }
     moreWrap.replaceChildren(!st.q && st.items.length < st.total ? btn(`Show more (${st.total - st.items.length} left)`, { onClick: (e) => busy(e.currentTarget, () => load(false)) }) : '');
   }
   const openNew = (mode) => mode === 'booking' && !can.createBooking() ? toast('An Executive cannot create a booking.', 'error') : openDeliveryForm({ mode, onDone: (id) => { load(true); openDetail(id); } });
   search.addEventListener('input', debounce(() => { st.q = search.value; load(true); }, 300));
   mount(root, h('div', { class: 'page-head' }, h('div', null, h('h1', 'Deliveries'), h('p', { class: 'muted' }, 'Hand over vehicles, extend, swap and pick up.')),
     h('div', { class: 'page-actions' }, can.createBooking() ? btn('New booking', { ic: 'clock', onClick: () => openNew('booking') }) : null, btn('New delivery', { kind: 'primary', ic: 'plus', onClick: () => openNew('deliver') }))),
-    h('div', { class: 'toolbar' }, h('div', { class: 'search' }, icon('search', 18), search), chips), countEl, list, moreWrap);
+    h('div', { class: 'toolbar' }, h('div', { class: 'search' }, icon('search', 18), search), chips, viewBtns), countEl, list, moreWrap);
   await load(true);
   if (params.open) openDetail(Number(params.open));
   if (params.new) openNew(params.new === 'booking' ? 'booking' : 'deliver');
@@ -115,7 +121,7 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
   // An approver who opens a delivery that waits for approval holds a lock on it, so nobody changes it while it is being reviewed.
   let held = false, beat = null; const LOCK_MIN = 10;
   const releaseLock = () => { clearInterval(beat); beat = null; if (held) { held = false; rpc('release_delivery_lock', { p_id: id }).catch(() => {}); } };
-  const s = openSheet({ title: 'Delivery', body: skeletonRows(5), footer: [], wide: true, onClose: releaseLock });
+  const s = openSheet({ title: 'Delivery', body: skeletonRows(5), footer: [], wide: 'xl', onClose: releaseLock });
   const reload = async () => { await paint(); onChange?.(); };
   async function paint() {
     try {
@@ -141,7 +147,7 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
         sb.from('booking_replacements').select('*').eq('booking_id', id).order('created_at', { ascending: true }).then(r => (r.error ? { data: [] } : r), () => ({ data: [] }))]);
       for (const r of [cRes, hRes, mRes, eRes, wRes, kRes]) if (r.error) throw r.error;
       let helmets = []; if (hRes.data.length) { const { data } = await sb.from('helmets').select('id,code').in('id', hRes.data.map(x => x.helmet_id)); helmets = hRes.data.map(x => ({ ...x, code: data?.find(y => y.id === x.helmet_id)?.code || `#${x.helmet_id}` })); }
-      const vehicleIds = [...new Set([...wRes.data.flatMap(w => [w.old_vehicle_id, w.new_vehicle_id]), ...rpRes.data.flatMap(r => [r.old_vehicle_id, r.new_vehicle_id])].filter(Boolean))]; const vmap = new Map();
+      const vehicleIds = [...new Set([...wRes.data.flatMap(w => [w.old_vehicle_id, w.new_vehicle_id, w.planned_vehicle_id]), ...rpRes.data.flatMap(r => [r.old_vehicle_id, r.new_vehicle_id])].filter(Boolean))]; const vmap = new Map();
       if (vehicleIds.length) (await sb.from('vehicles').select('id,number').in('id', vehicleIds)).data?.forEach(v => vmap.set(v.id, v.number));
       draw(d, { customer: cRes.data, vehicle: vRes.data, helmets, money: mRes.data, extensions: eRes.data, swaps: wRes.data, pickups: kRes.data, bill, vmap, bookVeh: bvRes.data, repl: rpRes.data });
     } catch (e) { mount(s.body, h('div', { class: 'empty' }, icon('alert', 28), h('h3', 'Could not load this delivery'), h('p', friendlyError(e)), btn('Try again', { kind: 'primary', onClick: paint }))); }
@@ -220,7 +226,7 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
       x.bill.deposit_refunded > 0 ? row('Deposit given back', x.bill.deposit_refunded, 'muted') : null,
       row(x.bill.balance_due < 0 ? (live ? 'To give back to the customer' : 'Overpaid') : 'Balance to collect', Math.abs(x.bill.balance_due), x.bill.balance_due > 0 ? 'due' : 'ok')) : null;
 
-    const dPhotoSet = photoSetView(d.photo_set || legacySet(d.photos), 'Vehicle at handover');
+    const dPhotoSet = photoSlider(d.photo_set || legacySet(d.photos), 'Vehicle at handover');
     mount(s.body, top,
       blockers.length && !['closed', 'cancelled', 'booked', 'booking_pending'].includes(d.status) ? h('div', { class: 'callout' }, icon('info', 18), h('span', blockers.join(' '))) : null,
       d.status === 'cancelled' && advLeft > 0 ? h('div', { class: 'callout' }, icon('alert', 18), h('span', `The customer paid ${fmtMoney(advIn)} as a booking advance. ${fmtMoney(advLeft)} still has to be refunded.`)) : null,
@@ -233,17 +239,17 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
         pendingRepl.created_by === me && !ap ? btn('Withdraw', { small: true, onClick: () => closeRepl(pendingRepl, 'cancel') }) : null) : null,
       rentCmp(d, x),
       h('div', { class: 'action-bar' }, actions),
-      sectionBlock('Details', h('dl', { class: 'kvs' },
+      h('div', { class: 'bento detail-bento' }, sectionBlock('Details', h('dl', { class: 'kvs' },
         d.booking_name ? kv('Booking name', d.booking_name) : null, d.booking_phone ? kv('Booking phone', fmtPhone(d.booking_phone)) : null,
         !d.booking_name ? kv('Booking details (typed at booking)', d.booking_text ? h('span', { class: 'prewrap' }, d.booking_text) : null) : null,
         x.bookVeh && ['booked', 'booking_pending'].includes(d.status) ? kv('Vehicle locked for this booking', h('span', null, `${x.bookVeh.number}, ${model(x.bookVeh.model_id)?.name || ''}`, d.booking_for && d.booking_days ? h('small', { class: 'cell-note' }, `Locked ${fmtDateTimeY(d.booking_for)} to ${fmtDateTimeY(new Date(new Date(d.booking_for).getTime() + d.booking_days * 86400000))} (${d.booking_days} day${d.booking_days === 1 ? '' : 's'})`) : null)) : null,
         ['booked', 'booking_pending'].includes(d.status) && d.booking_days && !x.bookVeh ? kv('Days booked', String(d.booking_days)) : null,
         ['booked', 'booking_pending'].includes(d.status) && !d.booking_vehicle_id ? kv('Vehicle', 'Not chosen at booking, so no vehicle is locked') : null,
         d.booking_note ? kv('Remarks', d.booking_note) : null,
-        kv('Customer', x.customer ? h('span', null, x.customer.name, h('small', { class: 'cell-note' }, fmtPhone(x.customer.mobile)), x.customer.status === 'pending' ? chip('Waiting for approval', 'pink') : null) : null),
+        kv('Customer', x.customer ? h('span', null, x.customer.name, h('small', { class: 'cell-note' }, fmtPhone(x.customer.mobile)), x.customer.status === 'pending' ? chip('Waiting for approval', 'pink') : null, btn('View customer', { small: true, ic: 'eye', onClick: () => openCustomerView(x.customer.id, { onChange: reload }) })) : null),
         ['booked', 'booking_pending'].includes(d.status) ? kv('Planned delivery', fmtDateTimeY(d.booking_for)) : null, d.booking_approved_at ? kv('Booking approved by', `${whoName(d.booking_approved_by)}, ${fmtDateTimeY(d.booking_approved_at)}`) : null,
         kv('Vehicle', x.vehicle ? `${x.vehicle.number}, ${model(x.vehicle.model_id)?.name || ''}` : null), kv('Helmets', x.helmets.length ? h('span', null, x.helmets.map(hh => chip(hh.code + (hh.returned_at ? ', returned' : ''), hh.returned_at ? 'neutral' : 'blue'))) : (['booked', 'booking_pending'].includes(d.status) ? null : 'None')),
-        kv('Handed over', d.handover_mode === 'office' ? 'The customer collected it at the Office' : d.handover_mode === 'delivery' ? 'We delivered it to the customer' : null), kv('Delivered', d.delivered_at ? fmtDateTimeY(d.delivered_at) : null), kv(d.handover_mode === 'office' ? 'Collected at' : 'Delivery location', d.delivery_place), kv('Current address', d.current_address), kv('Taken from', loc(d.from_location_id)?.name),
+        kv('Handed over', d.handover_mode === 'office' ? 'The customer collected it at the Office' : d.handover_mode === 'delivery' ? 'We delivered it to the customer' : null), kv('Delivered', d.delivered_at ? fmtDateTimeY(d.delivered_at) : null), kv('Handover location (GPS)', geoLine(d)), kv(d.handover_mode === 'office' ? 'Collected at' : 'Delivery location', d.delivery_place), kv('Current address', d.current_address), kv('Taken from', loc(d.from_location_id)?.name),
         d.reviewed_at ? kv('Details reviewed by', `${whoName(d.reviewed_by)}, ${fmtDateTimeY(d.reviewed_at)}`) : null,
         kv('Return due', d.return_due ? fmtDateTimeY(d.return_due) : null), kv('Days', d.days ? `${d.days}${activeExt.length ? ` + ${activeExt.reduce((a, e) => a + e.extra_days, 0)} extended` : ''}` : null),
         kv('Trip', d.trip_type === 'road' ? 'Road trip' : d.trip_type === 'local' ? 'Local trip' : null), kv('Customer preferred return', d.preferred_return_at ? fmtDateTimeY(d.preferred_return_at) : null),
@@ -260,10 +266,11 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
           e.status === 'pending' && (e.created_by === me || ap) || (e.status === 'approved' && can.manager() && d.status === 'active') ? btn('Cancel', { small: true, onClick: () => cancelExt(e) }) : null))))) : null,
       x.swaps.length ? sectionBlock('Swaps', h('ul', { class: 'pay-list' }, x.swaps.map(w => swapRow(w, d, x)))) : null,
       x.pickups.length ? sectionBlock('Pickup', h('ul', { class: 'pay-list' }, x.pickups.map(k => h('li', { class: 'pay-row stacked' }, h('div', { class: 'pay-row-top' }, h('div', null, h('strong', `Picked up at ${k.return_place || loc(k.return_location_id)?.name || ''}, ${fmtDateTime(k.returned_at)}`),
-        h('small', `${k.km_used} km used, ${k.allowed_km} km allowed over ${k.rental_days} days. ${k.extra_km} km extra = ${fmtMoney(k.extra_km_charge)}${k.other_charges_amount > 0 ? `. ${k.other_charges_text || 'Other'}: ${fmtMoney(k.other_charges_amount)}` : ''}.${k.condition_note ? ' ' + k.condition_note : ''}`), h('small', `By ${whoName(k.created_by)}`)),
+        h('small', `${k.km_used} km used, ${k.allowed_km} km allowed over ${k.rental_days} days. ${k.extra_km} km extra = ${fmtMoney(k.extra_km_charge)}${k.other_charges_amount > 0 ? `. ${k.other_charges_text || 'Other'}: ${fmtMoney(k.other_charges_amount)}` : ''}.${k.condition_note ? ' ' + k.condition_note : ''}`), h('small', `By ${whoName(k.created_by)}${k.handover_mode ? (k.handover_mode === 'office' ? '. The customer brought it to the Office' : '. We picked it up from the customer') : ''}`), k.geo_lat != null ? h('small', null, 'Location (GPS): ', geoLine(k)) : null),
         h('div', { class: 'pay-act' }, k.status === 'approved' ? statusBadge('active', 'Approved') : k.status === 'cancelled' ? chip('Cancelled', 'neutral') : chip('Waiting for approval', 'blue'))),
-        photoSetView(k.photo_set || legacySet(k.photos), 'Photos at return'))))) : null,
-      dPhotoSet ? sectionBlock('Photos at handover', dPhotoSet) : null);
+        compareSlider(d.photo_set, k.photo_set || legacySet(k.photos), { title: 'Photos: handover and return', oldTitle: 'At handover', newTitle: 'At return' }))))) : null,
+      dPhotoSet ? sectionBlock('Photos at handover', dPhotoSet) : null));
+    s.body.querySelectorAll('.detail-bento > .form-section').forEach(sec => { if (/^(Payment summary|Payments|Extensions|Swaps|Pickup|Photos)/.test(sec.querySelector('h3')?.textContent || '')) sec.classList.add('span2'); });
     hydrateTiles(s.body, d.code);
     mount(s.foot, ...(primary.length ? primary : [btn('Close', { onClick: () => s.close() })]));
   }
@@ -316,15 +323,16 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
     const hasData = !!w.new_vehicle_id;
     const details = (w.status === 'assigned' || !hasData) ? null : h('div', { class: 'swap-details' },
       h('dl', { class: 'kvs' },
-        h('div', { class: 'kv' }, h('dt', 'Swap location'), h('dd', w.swap_place || '')), h('div', { class: 'kv' }, h('dt', 'Current address'), h('dd', { class: 'prewrap' }, w.current_address || '')),
+        h('div', { class: 'kv' }, h('dt', 'Swap location'), h('dd', `${w.swap_place || ''}${w.handover_mode ? (w.handover_mode === 'office' ? ' (customer came to the Office)' : ' (we went to the customer)') : ''}`)), w.geo_lat != null ? h('div', { class: 'kv' }, h('dt', 'Location (GPS)'), h('dd', geoLine(w))) : null, h('div', { class: 'kv' }, h('dt', 'Current address'), h('dd', { class: 'prewrap' }, w.current_address || '')),
         h('div', { class: 'kv' }, h('dt', 'Old vehicle'), h('dd', `${x.vmap.get(w.old_vehicle_id) || ''}, reading ${w.odometer_in_old} km`)), h('div', { class: 'kv' }, h('dt', 'New vehicle'), h('dd', `${x.vmap.get(w.new_vehicle_id) || ''}, reading ${w.odometer_out_new} km`)),
         w.note ? h('div', { class: 'kv' }, h('dt', 'Note'), h('dd', w.note)) : null,
         w.reviewed_at ? h('div', { class: 'kv' }, h('dt', 'Reviewed by'), h('dd', `${whoName(w.reviewed_by)}, ${fmtDateTimeY(w.reviewed_at)}`)) : null),
-      photoSetView(w.photos_old, 'Old bike received back'), photoSetView(w.photos_new, 'New bike given'));
+      compareSlider(d.photo_set, w.photos_old, { title: 'Old bike: handover and received back', oldTitle: 'At handover', newTitle: 'Received back' }), photoSlider(w.photos_new, 'New bike given'));
     if (details) queueMicrotask(() => hydrateTiles(details, d.code));
     return h('li', { class: 'pay-row stacked' }, h('div', { class: 'pay-row-top' }, h('div', null, h('strong', w.status === 'assigned' ? `To be done by ${who_(w.assigned_to)}` : !hasData ? `Swap cancelled (was to be done by ${who_(w.assigned_to)})` : `${x.vmap.get(w.old_vehicle_id) || ''} replaced by ${x.vmap.get(w.new_vehicle_id) || ''}`),
-      h('small', `Assigned by ${whoName(w.assigned_by)}${w.reason ? `. ${w.reason}` : ''}${w.done_by ? `. Done by ${whoName(w.done_by)}` : ''}`)),
+      h('small', `Assigned by ${whoName(w.assigned_by)}${w.reason ? `. ${w.reason}` : ''}${w.done_by ? `. Done by ${whoName(w.done_by)}` : ''}`), w.planned_vehicle_id && w.status === 'assigned' ? h('small', null, `Vehicle to give: ${x.vmap.get(w.planned_vehicle_id) || ''}`) : null),
       h('div', { class: 'pay-act' }, chip(label, w.status === 'approved' || w.status === 'cancelled' ? 'neutral' : 'blue'),
+        w.status === 'assigned' && can.assignSwap() ? btn('Change vehicle', { small: true, onClick: () => openChangeSwapVehicle({ swap: w, delivery: d, onDone: reload }) }) : null,
         w.status === 'assigned' && (w.assigned_to === me || can.admin()) ? btn('Do the swap', { small: true, kind: 'primary', onClick: () => openDoSwap({ swap: w, delivery: d, onDone: reload }) }) : null,
         w.status === 'done' && can.approve() && !w.reviewed_at ? btn('Step 1: I have reviewed the details', { small: true, kind: 'primary', onClick: () => review('review_swap', w.id, 'swap', 'I have checked the new and old vehicle, readings, address, location, all the photos (odometer and four sides of each bike) and the payments.') }) : null,
         w.status === 'done' && can.approve() && w.reviewed_at ? btn('Step 2: Confirm swap', { small: true, kind: 'primary', onClick: () => approve('approve_swap', w.id, 'swap', 'The new vehicle goes to the customer and the old one goes back to its Office.') }) : null,
