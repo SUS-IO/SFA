@@ -227,15 +227,15 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, edit = null
   const at = input({ type: 'datetime-local', value: localInputValue() });
   const days = wholeInput('1'); if (booking?.booking_days) days.value = String(booking.booking_days); const fDays = field('Number of days', days, { required: true });
   
-  const trip = select([{ value: '', label: 'Choose trip kind' }, ...TRIPS.map(t => ({ value: t.value, label: t.label }))]); const fTrip = field('Trip kind', trip, { required: true, hint: 'The rent and extra km rate come from the vehicle master for this kind of trip.' });
-  const rent = moneyInput(); const fRent = field('Rent per day', rent, { required: true, hint: 'Filled in from the vehicle master. You can change it for this delivery only; the master stays the same.' });
+  const trip = select([{ value: '', label: 'Choose trip kind' }, ...TRIPS.map(t => ({ value: t.value, label: t.label }))]); const fTrip = field('Trip kind', trip, { required: true, hint: 'Select Trip Mode' });
+  const rent = moneyInput(); const fRent = field('Rent per day', rent, { required: true, hint: 'Default Rate as per Master' });
   const rentNote = h('p', { class: 'muted small' });
   let rentTouched = false, xTouched = false;
   const pref = input({ type: 'datetime-local' }); const fPref = field('Customer preferred return time (optional)', pref, { hint: 'For the back office to follow up. It must be after the handover time and not later than the end of the rental.' });
   const dep = moneyInput(); const fDep = field('Deposit', dep);
   const dch = moneyInput(); const fDch = field('Delivery charges', dch);
   const apc = moneyInput(); const fApc = field('Advance pickup charges', apc);
-  const km = kmLimitField(); const xrate = moneyInput(); const fX = field('Extra km rate (per km)', xrate, { required: true, hint: 'Filled in from the vehicle master for the trip kind. You can change it.' });
+  const km = kmLimitField(); const xrate = moneyInput(); const fX = field('Extra km rate (per km)', xrate, { required: true, hint: 'Default Rate as per Master' });
   const odo = wholeInput(); const fOdo = field('Odometer reading', odo, { required: true });
   const ot = input({ placeholder: 'For example Helmet damage cover' }); const oa = moneyInput(); const fOa = field('Other charge amount', oa);
   const photos = photoSet('Vehicle photos at handover', { helmets: true, existing: d0?.photo_set || null });
