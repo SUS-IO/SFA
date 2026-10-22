@@ -107,7 +107,7 @@ export function openBookingForm({ booking = null, onDone }) {
   const when = input({ type: 'datetime-local', value: localInputValue(booking?.booking_for ? new Date(booking.booking_for) : new Date(Date.now() + 86400000)) });
   const fWhen = field('Planned delivery date and time', when, { required: true });
   const days = wholeInput('1'); if (booking?.booking_days) days.value = String(booking.booking_days);
-  const fDays = field('Number of days', days, { required: true, hint: 'The vehicle is locked for this many days from the planned delivery time. Nobody else can deliver, swap or book it in that time.' });
+  const fDays = field('Number of days', days, { required: true, hint: '' });
   const vSel = select([{ value: '', label: 'Choose a vehicle' }]); const fVeh = field('Vehicle number', vSel, { required: true });
   const rem = textarea({ rows: '2', placeholder: 'Anything to remember', value: booking?.booking_note || '' });
   const adv = edit ? null : paymentsEditor({ title: 'Booking advance received', purposes: ['Booking advance'], first: 'Booking advance', lockPurpose: true,optional: false,
