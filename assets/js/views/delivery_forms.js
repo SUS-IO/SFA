@@ -154,7 +154,7 @@ export function openBookingForm({ booking = null, onDone }) {
       s.close(); onDone?.(id);
     } catch (e) { toast(friendlyError(e), 'error'); } });
   } } }, fName, phone.el, h('div', { class: 'grid-2' }, fWhen, fDays), fVeh, field('Remarks', rem), adv ? adv.el : null,
-    h('p', { class: 'muted small' }, 'A new booking waits for an Approver (or above) before it can be handed over. The vehicle can still be moved between places while it is booked.')));
+    h('p', { class: 'muted small' }, 'please check before you submit')));
   const s = openSheet({ title: edit ? 'Edit booking' : 'New booking', subtitle: booking?.code, body: form, footer: [cancel, submit], guard: sv.guard });
   return s;
 }
