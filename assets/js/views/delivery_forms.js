@@ -110,8 +110,8 @@ export function openBookingForm({ booking = null, onDone }) {
   const fDays = field('Number of days', days, { required: true, hint: 'The vehicle is locked for this many days from the planned delivery time. Nobody else can deliver, swap or book it in that time.' });
   const vSel = select([{ value: '', label: 'Choose a vehicle' }]); const fVeh = field('Vehicle number', vSel, { required: true });
   const rem = textarea({ rows: '2', placeholder: 'Anything to remember', value: booking?.booking_note || '' });
-  const adv = edit ? null : paymentsEditor({ title: 'Booking advance received now (optional)', purposes: ['Booking advance'], first: 'Booking advance', lockPurpose: true,
-    hint: 'If the customer pays something now to hold the booking, add it here. Leave the amount empty if nothing was received. It counts towards the delivery total later; if the booking is cancelled it must be refunded.' });
+  const adv = edit ? null : paymentsEditor({ title: 'Booking advance received', purposes: ['Booking advance'], first: 'Booking advance', lockPurpose: true,optional: false,
+    hint: 'Please communicate bookings to your superior ' });
   let seq = 0, wanted = booking?.booking_vehicle_id ? String(booking.booking_vehicle_id) : '';
   async function loadVehicles() {
     const my = ++seq; const n = Number(days.value);
