@@ -455,3 +455,25 @@ fieldset.freeze[disabled] { opacity: .6; pointer-events: none; }
 .seg { display: inline-flex; gap: 6px; } .card-item.clickable { cursor: pointer; } .card-item.clickable:hover, .card-item.clickable:focus-visible { border-color: var(--blue); outline: none; }
 .card-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; } .card-meta { display: flex; gap: 12px; flex-wrap: wrap; color: var(--ink-2); font-size: 13px; }
 .card-item .pay-act { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---- Stage 11: attendance ---- */
+.att-body { margin-top: 12px; display: grid; gap: 14px; }
+.att-big { display: grid; gap: 2px; } .att-big strong { font-size: 22px; } .att-big.in strong { color: var(--blue); } .att-big.out strong { color: var(--ink-2); }
+.att-status { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.att-total { display: grid; text-align: right; } .att-total strong { font-size: 22px; }
+.att-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.att-row { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: #fff; }
+.att-times { display: grid; min-width: 150px; } .att-times small { color: var(--ink-2); }
+.att-selfies { display: flex; gap: 6px; } .att-places { display: grid; gap: 2px; flex: 1 1 200px; min-width: 0; } .att-place { color: var(--ink-2); overflow-wrap: anywhere; }
+.selfie { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: #f3f5f8; display: inline-grid; place-items: center; overflow: hidden; padding: 0; cursor: zoom-in; }
+.selfie img { width: 100%; height: 100%; object-fit: cover; } .selfie.none { cursor: default; color: var(--ink-2); }
+.att-hours { display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; } .att-hours strong { font-size: 20px; } .att-hours small { color: var(--ink-2); }
+.att-summary { display: grid; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: #fff; } .att-summary strong { font-size: 24px; } .att-summary small { color: var(--ink-2); }
+.att-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 12px; max-height: 220px; overflow: auto; padding: 6px 2px; }
+.att-person { display: flex; align-items: center; gap: 8px; } .att-person input { width: 18px; height: 18px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.att-map { height: 420px; border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: #eef1f5; } .att-map .pad { padding: 16px; }
+.att-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0; } .att-key { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.att-key i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; } .att-key i.ring { background: #fff; border: 3px solid var(--ink-2); box-sizing: border-box; }
+.att-pop { display: grid; gap: 4px; }
+@media (max-width: 520px) { .grid2 { grid-template-columns: minmax(0, 1fr); } .att-map { height: 320px; } }
