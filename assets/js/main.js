@@ -26,12 +26,13 @@ const ROUTES = {
   live:      { title: 'Live customers', icon: 'users', load: () => import('./views/live.js'), guard: () => can.call() },
   accounts:  { title: 'Accounts', icon: 'database', load: () => import('./views/accounts.js'), guard: () => can.admin() },
   finance:   { title: 'Accounts', icon: 'database', load: () => import('./views/accounts.js'), guard: () => can.admin() },
+  attendance: { title: 'Attendance', icon: 'clock', load: () => import('./views/attendance.js') },
   inbox:     { title: 'To do', icon: 'inbox', load: () => import('./views/inbox.js') },
   logs:      { title: 'Logs', icon: 'list', load: () => import('./views/logs.js') },
   settings:  { title: 'Settings', icon: 'gear', load: () => import('./views/settings.js'), guard: () => can.admin() },
   admin:     { title: 'Admin', icon: 'shield', load: () => import('./views/admin.js'), guard: () => can.admin() },
 };
-const SIDE = ['dashboard', 'deliveries', 'inbox', 'live', 'money', 'accounts', 'reports', 'customers', 'vehicles', 'helmets', 'movement', 'logs', 'settings', 'admin'];
+const SIDE = ['dashboard', 'deliveries', 'inbox', 'live', 'money', 'attendance', 'accounts', 'reports', 'customers', 'vehicles', 'helmets', 'movement', 'logs', 'settings', 'admin'];
 const TABS = ['dashboard', 'deliveries', 'inbox', 'money'];
 
 let cleanup = null, watching = false, shell = null;
