@@ -90,13 +90,13 @@ export function lightbox(url, caption) {
 
 // ---- photo picker field -----------------------------------------------------
 // opts: { label, required, existing (path) }
-export function photoField({ label, required = false, existing = null } = {}) {
+export function photoField({ label, required = false, existing = null, cameraOnly = false, facing = 'environment' } = {}) {
   let picked = null;                       // { blob, size, type, previewUrl }
   let removedExisting = false;
   const frame = h('div', { class: 'photo-frame' });
   const meta = h('span', { class: 'photo-size' });
   const err = h('p', { class: 'field-error', hidden: true, role: 'alert' });
-  const cam = h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true, tabindex: '-1' });
+  const cam = h('input', { type: 'file', accept: 'image/*', capture: facing, hidden: true, tabindex: '-1' });
   const gal = h('input', { type: 'file', accept: 'image/*', hidden: true, tabindex: '-1' });
   const actions = h('div', { class: 'photo-actions' });
   const root = h('div', { class: 'photo' },
@@ -119,7 +119,7 @@ export function photoField({ label, required = false, existing = null } = {}) {
         h('button', { type: 'button', class: 'btn btn-ghost btn-sm', on: { click: () => { clearPicked(); removedExisting = !!existing; paint(); } } }, icon('x', 16), h('span', 'Remove')));
     } else {
       actions.append(h('button', { type: 'button', class: 'btn btn-secondary btn-sm', on: { click: () => cam.click() } }, icon('camera', 16), h('span', 'Take photo')),
-        h('button', { type: 'button', class: 'btn btn-ghost btn-sm', on: { click: () => gal.click() } }, icon('image', 16), h('span', 'Choose file')));
+        cameraOnly ? null : h('button', { type: 'button', class: 'btn btn-ghost btn-sm', on: { click: () => gal.click() } }, icon('image', 16), h('span', 'Choose file')));
     }
   };
   const clearPicked = () => { if (picked) URL.revokeObjectURL(picked.previewUrl); picked = null; };
