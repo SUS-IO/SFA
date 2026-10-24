@@ -477,3 +477,10 @@ fieldset.freeze[disabled] { opacity: .6; pointer-events: none; }
 .att-key i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; } .att-key i.ring { background: #fff; border: 3px solid var(--ink-2); box-sizing: border-box; }
 .att-pop { display: grid; gap: 4px; }
 @media (max-width: 520px) { .grid2 { grid-template-columns: minmax(0, 1fr); } .att-map { height: 320px; } }
+
+/* ---- Stage 12: simple payment tally ---- */
+.tally { display: grid; gap: 6px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: #fff; }
+.tally:empty { display: none; }
+.tally-row { display: flex; justify-content: space-between; gap: 12px; }
+.tally-result { margin-top: 4px; padding: 8px 10px; border-radius: 8px; font-weight: 600; }
+.tally-result.ok { background: #e6f6ec; color: #166534; } .tally-result.due { background: #fdecef; color: #a61e4d; }
