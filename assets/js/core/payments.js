@@ -106,12 +106,12 @@ function breakupRow({ purposes, purpose, amount = '', onChange, onRemove }) {
   };
 }
 
-function card({ purposes, first, firstAmount, lockPurpose, breakup, type, onChange, onRemove, onFill }) {
+function card({ purposes, first, firstAmount, lockPurpose, breakup, type, simple = false, onChange, onRemove, onFill }) {
   const income = type === 'Income';
   const via = select(VIAS.map(v => ({ value: v, label: v })), { 'aria-label': 'Paid by' });
   const fVia = field('Paid by', via, { required: true });
   const total = input({ inputmode: 'decimal', placeholder: '0', value: firstAmount === '' ? '' : String(firstAmount) });
-  const fTotal = field(breakup ? 'Total amount received' : 'Amount', total, { required: true });
+  const fTotal = field(breakup ? 'Total amount received' : simple ? 'Amount received' : 'Amount', total, { required: true });
   const holder = select(userOptions({ blank: true }), { value: state.me.id, 'aria-label': 'Cash held by' });
   const fHolder = field('Cash held by', holder, { required: true, hint: 'The person who has this cash. If it is not you, they must acknowledge it.' });
   const txn = input({ placeholder: 'For example the UTR printed on the screenshot', autocomplete: 'off' });
@@ -160,7 +160,7 @@ function card({ purposes, first, firstAmount, lockPurpose, breakup, type, onChan
   if (!breakup) {
     single = select(purposes.map(s => ({ value: s, label: s })), { value: first || purposes[0], 'aria-label': 'For' });
     if (lockPurpose || purposes.length === 1) single.disabled = true;
-    const fSingle = field('For', single, { required: true }); fSingle.hidden = (purposes.length === 1 && !lockPurpose) || (purposes.length === 1 && purposes[0] === 'Other');
+    const fSingle = field('For', single, { required: true }); fSingle.hidden = simple || (purposes.length === 1 && !lockPurpose) || (purposes.length === 1 && purposes[0] === 'Other');
     el.insertBefore(fSingle, el.children[onRemove ? 2 : 1] || null);
     const od = input({ placeholder: 'Specify details (for example Helmet damage cover)' }); const fOd = field('Other charges detail', od, { required: true });
     const so = () => { fOd.hidden = single.value !== 'Other charges'; if (fOd.hidden) od.value = ''; }; so();
@@ -220,9 +220,10 @@ function card({ purposes, first, firstAmount, lockPurpose, breakup, type, onChan
 //         expected: () => [{ head, amount }]  as per record,  credit: () => ({ label, amount })  held money that counts,
 //         onTotal(sum), optional, hint, lockPurpose }
 export function paymentsEditor({ title = 'Payments received', purposes = ['Rent', 'Deposit'], first = purposes[0], firstAmount = '', max = 100, onTotal, optional = true, hint = null,
-  lockPurpose = false, type = 'Income', breakup = null, expected = null, credit = null, summaryLabel = 'Payment summary' } = {}) {
+  lockPurpose = false, type = 'Income', breakup = null, expected = null, credit = null, summaryLabel = 'Payment summary', simple = false } = {}) {
   ensureStyles();
-  const useBreakup = breakup === null ? (purposes.length > 1 && !lockPurpose) : breakup;
+  const useBreakup = simple ? false : breakup === null ? (purposes.length > 1 && !lockPurpose) : breakup;
+  const errEl = h('p', { class: 'field-error', hidden: true, role: 'alert' });
   const cards = []; const host = h('div', { class: 'stack' }); const sumEl = h('p', { class: 'pay-sum' }); const tableHost = h('div', { class: 'stack-sm' });
   const note = h('p', { class: 'pay-note', hidden: true }, icon('info', 16), h('span'));
   const addBtn = btn('Add another payment', { ic: 'plus', small: true, onClick: () => add('') });
@@ -237,7 +238,7 @@ export function paymentsEditor({ title = 'Payments received', purposes = ['Rent'
     return out.length ? out : null;
   };
   const paintTable = () => {
-    if (!expected) return;
+    if (!expected || simple) return;
     const ex = expected(); const got = received(); const heads = ex.map(e => e.head);
     const rows = ex.map(e => ({ head: e.head, expected: r2(e.amount), received: r2(got[e.head] || 0) }));
     Object.keys(got).forEach(k => { if (!heads.includes(k)) rows.push({ head: k, expected: 0, received: r2(got[k]) }); });
@@ -253,17 +254,34 @@ export function paymentsEditor({ title = 'Payments received', purposes = ['Rent'
   };
   function add(purpose) {
     if (cards.length >= max) return toast(`At most ${max} payment${max === 1 ? '' : 's'}.`, 'error');
-    const c = card({ purposes, first: cards.length ? (purpose || purposes[0]) : first, firstAmount: cards.length ? '' : firstAmount, lockPurpose, breakup: useBreakup, type,
-      onChange: changed, onFill: expected ? fillFrom : null, onRemove: cards.length ? () => { cards.splice(cards.indexOf(c), 1); c.el.remove(); changed(); addBtn.hidden = false; } : null });
+    const c = card({ purposes, first: cards.length ? (purpose || purposes[0]) : first, firstAmount: cards.length ? '' : firstAmount, lockPurpose, breakup: useBreakup, type, simple,
+      onChange: changed, onFill: expected && !simple ? fillFrom : null, onRemove: cards.length ? () => { cards.splice(cards.indexOf(c), 1); c.el.remove(); changed(); addBtn.hidden = false; } : null });
     cards.push(c); host.append(c.el); changed(); addBtn.hidden = cards.length >= max;
   }
   add('');
   const el = h('section', { class: 'form-section' }, h('h3', title),
     (hint || optional) ? h('p', { class: 'muted small' }, hint || 'Leave the amount empty if nothing was received. Each payment has its own mode, transaction id and screenshot.') : null,
-    host, note, sumEl, max > 1 ? addBtn : null, tableHost);
+    errEl, host, note, sumEl, max > 1 ? addBtn : null, tableHost);
   return {
     el, total, received, refresh: changed, repaint: paintTable,
     validate() { let ok = true; for (const c of cards) { if (c.isBlank()) continue; if (!c.validate()) ok = false; } return ok; },
-    async collect(folder) { const out = []; for (const c of cards) { if (!c.isBlank()) out.push(...await c.collect(folder)); } return out; },
+    setError(msg) { errEl.textContent = msg || ''; errEl.hidden = !msg; },
+    // Simple mode: the person only enters payments. They are given to the charges in order (the booking advance first),
+    // so the records still hold one row per payment and charge.
+    async collect(folder) {
+      const out = []; for (const c of cards) { if (!c.isBlank()) out.push(...await c.collect(folder)); }
+      if (!simple || !expected) return out;
+      const ex = expected(); const dues = ex.map(e => ({ purpose: e.purpose || e.head, left: r2(e.amount) })).filter(e => e.left > 0);
+      const cc = credit?.(); let cr = cc ? Number(cc.amount) || 0 : 0;
+      for (const d of dues) { const t = Math.min(cr, d.left); d.left = r2(d.left - t); cr = r2(cr - t); }
+      const lastP = (() => { const l = ex.filter(e => e.amount > 0).pop(); return l ? (l.purpose || l.head) : (purposes[0] || 'Rent'); })();
+      const res = [];
+      for (const line of out) {
+        let amt = r2(Number(line.amount));
+        for (const d of dues) { if (amt <= 0) break; if (d.left <= 0) continue; const t = Math.min(amt, d.left); res.push({ ...line, purpose: d.purpose, amount: String(t) }); d.left = r2(d.left - t); amt = r2(amt - t); }
+        if (amt > 0) res.push({ ...line, purpose: lastP, amount: String(amt) });   // more than charged: kept on the last charge so nothing is lost
+      }
+      return res;
+    },
   };
 }
