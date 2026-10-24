@@ -107,11 +107,13 @@ export function openBookingForm({ booking = null, onDone }) {
   const when = input({ type: 'datetime-local', value: localInputValue(booking?.booking_for ? new Date(booking.booking_for) : new Date(Date.now() + 86400000)) });
   const fWhen = field('Planned delivery date and time', when, { required: true });
   const days = wholeInput('1'); if (booking?.booking_days) days.value = String(booking.booking_days);
-  const fDays = field('Number of days', days, { required: true, hint: '' });
+  const fDays = field('Number of days', days, { required: true, hint: 'The vehicle is locked for this many days from the planned delivery time. Nobody else can deliver, swap or book it in that time.' });
   const vSel = select([{ value: '', label: 'Choose a vehicle' }]); const fVeh = field('Vehicle number', vSel, { required: true });
+  const bplace = input({ value: booking?.booking_place || '', placeholder: 'Area or address where it will be delivered' }); const fBPlace = field('Delivery location', bplace, { required: true, hint: 'Type it. This is shown again when the vehicle is handed over.' });
+  bplace.addEventListener('input', () => fBPlace.setError(''));
   const rem = textarea({ rows: '2', placeholder: 'Anything to remember', value: booking?.booking_note || '' });
-  const adv = edit ? null : paymentsEditor({ title: 'Booking advance received', purposes: ['Booking advance'], first: 'Booking advance', lockPurpose: true,optional: false,
-    hint: 'Please communicate bookings to your superior ' });
+  const adv = edit ? null : paymentsEditor({ title: 'Booking advance received (required)', optional: false, purposes: ['Booking advance'], first: 'Booking advance', lockPurpose: true,
+    hint: 'The advance the customer paid to hold the booking. It is required. It counts towards the delivery total later; if the booking is cancelled it must be refunded.' });
   let seq = 0, wanted = booking?.booking_vehicle_id ? String(booking.booking_vehicle_id) : '';
   async function loadVehicles() {
     const my = ++seq; const n = Number(days.value);
@@ -140,21 +142,22 @@ export function openBookingForm({ booking = null, onDone }) {
     if (nameIn.value.trim().length < 2) { fName.setError('Enter the customer\'s name.'); ok = false; } else fName.setError('');
     if (!phone.validate()) ok = false;
     if (!vSel.value) { fVeh.setError('Choose the vehicle to book.'); ok = false; }
+    if (!bplace.value.trim()) { fBPlace.setError('Type the delivery location.'); ok = false; }
     if (vSel.selectedOptions[0]?.disabled) { fVeh.setError('That vehicle is locked for these dates. Choose another.'); ok = false; }
     if (!when.value) { fWhen.setError('Enter the planned date and time.'); ok = false; } else fWhen.setError('');
     ok = checkWhole(fDays, days, { min: 1, label: 'the days' }) && ok;
-    if (adv && !adv.validate()) ok = false;
+    if (adv) { adv.setError(''); if (!(adv.total() > 0)) { adv.setError('Enter the booking advance received. It is required.'); ok = false; } else if (!adv.validate()) ok = false; }
     if (!ok) { form.querySelector('.has-error, .field-error:not([hidden])')?.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
     sv.run(async () => { try {
-      const body = { booking_name: nameIn.value.trim(), booking_phone: phone.get(), booking_vehicle_id: vSel.value, booking_for: isoFromLocal(when.value), booking_days: days.value.trim(), booking_note: rem.value.trim() };
+      const body = { booking_name: nameIn.value.trim(), booking_phone: phone.get(), booking_vehicle_id: vSel.value, booking_place: bplace.value.trim(), booking_for: isoFromLocal(when.value), booking_days: days.value.trim(), booking_note: rem.value.trim() };
       let id;
       if (edit) { await rpc('update_booking', { p_id: booking.id, p: body }); id = booking.id; toast('Booking saved'); }
       else { body.payments = await adv.collect(`deliveries/${folderId()}/receipts`); id = await rpc('create_booking', { p: body });
         toast(body.payments.length ? 'Booking saved with the advance. The vehicle is locked. An approver must approve it.' : 'Booking saved. The vehicle is locked. An approver must approve it.'); }
       s.close(); onDone?.(id);
     } catch (e) { toast(friendlyError(e), 'error'); } });
-  } } }, fName, phone.el, h('div', { class: 'grid-2' }, fWhen, fDays), fVeh, field('Remarks', rem), adv ? adv.el : null,
-    h('p', { class: 'muted small' }, 'please check before you submit')));
+  } } }, fName, phone.el, h('div', { class: 'grid-2' }, fWhen, fDays), h('div', { class: 'grid-2' }, fVeh, fBPlace), field('Remarks', rem), adv ? adv.el : null,
+    h('p', { class: 'muted small' }, 'A new booking waits for an Approver (or above) before it can be handed over. The vehicle can still be moved between places while it is booked.')));
   const s = openSheet({ title: edit ? 'Edit booking' : 'New booking', subtitle: booking?.code, body: form, footer: [cancel, submit], guard: sv.guard });
   return s;
 }
@@ -208,7 +211,7 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, edit = null
   const vehicle = vehiclePicker({ label: 'Vehicle', selectId: booking?.booking_vehicle_id || d0?.vehicle_id || null, includeId: d0?.vehicle_id || null, onChange: () => { paintLast(); refreshRates(); checkConflict(); },
     window: () => { const st = startAt(), n = Number(days.value); return st ? { from: st, to: new Date(st.getTime() + (n >= 1 ? n : 1) * 86400000), exclude: booking?.id ?? d0?.id ?? null } : null; } });
   const handover = segmented([{ value: 'delivery', label: 'We are delivering' }, { value: 'office', label: 'Customer is coming to collect' }], d0?.handover_mode || 'delivery', () => paintMode());
-  const place = input({ placeholder: 'Area or place, for example Anna Nagar' }); const fPlace = field('Delivery location / area', place, { required: true, hint: 'Type it. Nothing is filled in for you.' });
+  const place = input({ value: booking?.booking_place || '', placeholder: 'Area or place, for example Anna Nagar' }); const fPlace = field('Delivery location / area', place, { required: true, hint: 'Type it. Nothing is filled in for you.' });
   const lastLoc = h('div', { class: 'callout' });
   let lastSeq = 0;
   async function paintLast() {
@@ -227,20 +230,20 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, edit = null
   const at = input({ type: 'datetime-local', value: localInputValue() });
   const days = wholeInput('1'); if (booking?.booking_days) days.value = String(booking.booking_days); const fDays = field('Number of days', days, { required: true });
   
-  const trip = select([{ value: '', label: 'Choose trip kind' }, ...TRIPS.map(t => ({ value: t.value, label: t.label }))]); const fTrip = field('Trip kind', trip, { required: true, hint: 'Select Trip Mode' });
-  const rent = moneyInput(); const fRent = field('Rent per day', rent, { required: true, hint: 'Default Rate as per Master' });
+  const trip = select([{ value: '', label: 'Choose trip kind' }, ...TRIPS.map(t => ({ value: t.value, label: t.label }))]); const fTrip = field('Trip kind', trip, { required: true, hint: 'The rent and extra km rate come from the vehicle master for this kind of trip.' });
+  const rent = moneyInput(); const fRent = field('Rent per day', rent, { required: true, hint: 'Filled in from the vehicle master. You can change it for this delivery only; the master stays the same.' });
   const rentNote = h('p', { class: 'muted small' });
   let rentTouched = false, xTouched = false;
   const pref = input({ type: 'datetime-local' }); const fPref = field('Customer preferred return time (optional)', pref, { hint: 'For the back office to follow up. It must be after the handover time and not later than the end of the rental.' });
   const dep = moneyInput(); const fDep = field('Deposit', dep);
   const dch = moneyInput(); const fDch = field('Delivery charges', dch);
   const apc = moneyInput(); const fApc = field('Advance pickup charges', apc);
-  const km = kmLimitField(); const xrate = moneyInput(); const fX = field('Extra km rate (per km)', xrate, { required: true, hint: 'Default Rate as per Master' });
+  const km = kmLimitField(); const xrate = moneyInput(); const fX = field('Extra km rate (per km)', xrate, { required: true, hint: 'Filled in from the vehicle master for the trip kind. You can change it.' });
   const odo = wholeInput(); const fOdo = field('Odometer reading', odo, { required: true });
   const ot = input({ placeholder: 'For example Helmet damage cover' }); const oa = moneyInput(); const fOa = field('Other charge amount', oa);
   const photos = photoSet('Vehicle photos at handover', { helmets: true, existing: d0?.photo_set || null });
   const note = textarea({ rows: '2', placeholder: 'Anything to remember' });
-  const total = h('div', { class: 'total-box' }); const billEl = h('p', { class: 'bill-line' });
+  const total = h('div', { class: 'total-box' }); const billEl = h('div', { class: 'tally' });
   
   const totalRent = () => num(rent.value) * (num(days.value) || 1);
   const charged = () => totalRent() + num(dep.value) + num(dch.value) + num(apc.value) + num(oa.value);
@@ -249,10 +252,13 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, edit = null
     const t = totalRent() + num(dep.value) + num(dch.value) + num(apc.value) + num(oa.value);
     mount(total, h('span', 'Total amount'), h('strong', fmtMoney(t)), h('small', `Rent (${fmtMoney(num(rent.value))} x ${num(days.value) || 1} days) + deposit + delivery charges + advance pickup charges + other charges`));
     const diff = r2(charged() - paySum - advance);
-    pay?.repaint?.();
-    billEl.className = 'bill-line' + (diff === 0 && charged() > 0 ? ' ok' : ' due');
-    const advTxt = advance ? ` (including the booking advance of ${fmtMoney(advance)} received earlier)` : '';
-    billEl.textContent = charged() === 0 ? '' : diff === 0 ? `Amount received equals the amount charged (${fmtMoney(charged())})${advTxt}.` : diff > 0 ? `Still to receive: ${fmtMoney(diff)}. The amount received${advTxt} must equal the amount charged (${fmtMoney(charged())}).` : `Received ${fmtMoney(-diff)} too much. The amount received${advTxt} must equal the amount charged (${fmtMoney(charged())}).`;
+    const row = (l, v, cls = '') => h('div', { class: `tally-row ${cls}`.trim() }, h('span', l), h('strong', v));
+    if (charged() === 0) { mount(billEl); return; }
+    const ok = Math.abs(diff) < 0.005;
+    mount(billEl, row('Total charges', fmtMoney(charged())),
+      advance ? row(isEdit ? 'Already received for this delivery' : 'Booking advance (received earlier)', fmtMoney(advance)) : null,
+      row(isEdit ? 'Received now (extra)' : 'Received now (cash or online)', fmtMoney(paySum)),
+      h('div', { class: `tally-result ${ok ? 'ok' : 'due'}`, role: 'status' }, ok ? 'Tallied. Total charges equal the amount received.' : diff > 0 ? `Still to receive ${fmtMoney(diff)}` : `Received ${fmtMoney(-diff)} too much`));
   };
   [rent, dep, dch, apc, oa, days].forEach(i => i.addEventListener('input', recalc));
   // ---- rent from the vehicle master, end of rental, preferred return, and bookings that lock the vehicle
@@ -292,16 +298,17 @@ export function openDeliveryForm({ mode = 'deliver', booking = null, edit = null
   days.addEventListener('input', onTimeChange); at.addEventListener('change', onTimeChange);
   
   // Restricted purpose list matching exact delivery categories: Rent, Deposit, Delivery charges, Advance pickup charges, Other charges
-  pay = paymentsEditor({ title: isEdit ? 'More payment received now (optional)' : 'Payments received', optional: isEdit, purposes: ['Rent', 'Deposit', 'Delivery charges', 'Advance pickup charges', 'Other charges'], first: 'Rent',
-    hint: 'Enter each payment once: how it was paid, the transaction id and screenshot (if not cash), then split it over the charges. Use "Fill from the charges" to split it as per this delivery.',
-    expected: () => [{ head: 'Rent', amount: totalRent() }, { head: 'Deposit', amount: num(dep.value) }, { head: 'Delivery charges', amount: num(dch.value) }, { head: 'Advance pickup charges', amount: num(apc.value) }, { head: 'Other charges', amount: num(oa.value) }],
+  pay = paymentsEditor({ title: isEdit ? 'More payment received now (optional)' : 'Payment received now', optional: isEdit, simple: true, purposes: ['Rent', 'Deposit', 'Delivery charges', 'Advance pickup charges', 'Other charges'], first: 'Rent',
+    hint: 'Enter only what was received now: the amount, how it was paid, and the transaction id and screenshot if it is not cash. The booking advance is added automatically. The total received must equal the total charges.',
+    expected: () => [{ head: 'Rent', amount: totalRent() }, { head: 'Deposit', amount: num(dep.value) }, { head: 'Delivery charges', amount: num(dch.value) }, { head: 'Advance pickup charges', amount: num(apc.value) },
+      { head: 'Other charges', purpose: ot.value.trim() ? `Other charges (${ot.value.trim()})` : 'Other charges', amount: num(oa.value) }],
     credit: () => (advance ? { label: isEdit ? 'Already received for this delivery' : 'Booking advance received earlier (adjusted)', amount: advance } : null),
     onTotal: (t) => { paySum = t; recalc(); } });
   recalc();
 
   const secs = [];
   if (booking) secs.push(h('div', { class: 'callout' }, icon('info', 18), h('span', null, h('strong', `Booking ${booking.code}: `), h('span', { class: 'prewrap' }, [booking.booking_name || booking.booking_text || '', booking.booking_phone ? `, ${booking.booking_phone}` : '',
-    booking.vehicle_number ? `. Booked vehicle ${booking.vehicle_number}` : '', booking.booking_days ? ` for ${booking.booking_days} day${booking.booking_days === 1 ? '' : 's'}` : '', booking.booking_note ? `. ${booking.booking_note}` : ''].join('')))));
+    booking.vehicle_number ? `. Booked vehicle ${booking.vehicle_number}` : '', booking.booking_days ? ` for ${booking.booking_days} day${booking.booking_days === 1 ? '' : 's'}` : '', booking.booking_place ? `. Delivery location: ${booking.booking_place}` : '', advance ? `. Booking advance received: ${fmtMoney(advance)}` : '', booking.booking_note ? `. ${booking.booking_note}` : ''].join('')))));
   const geo = isEdit ? null : geoCapture({ label: 'Where the handover happens (GPS, needed to save)', onAddress: (a, area) => { if (handover.get() === 'delivery' && !place.value.trim() && area) { place.value = area; place.dispatchEvent(new Event('input', { bubbles: true })); } } });
   const span = (el) => { el.classList.add('span2'); return el; };
   secs.push(h('div', { class: 'bento' },

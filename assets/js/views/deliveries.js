@@ -12,7 +12,7 @@ import { openCustomerView } from '../core/customer_view.js';
 import { mapsUrl } from '../core/geo.js';
 
 const PAGE = 40;
-const COLS = 'id,code,status,customer_id,vehicle_id,model_id,booking_for,booking_text,booking_name,booking_phone,booking_vehicle_id,booking_days,delivered_at,return_due,days,created_by,created_at,approved_at,reviewed_at';
+const COLS = 'id,code,status,customer_id,vehicle_id,model_id,booking_for,booking_text,booking_name,booking_phone,booking_vehicle_id,booking_place,booking_days,delivered_at,return_due,days,created_by,created_at,approved_at,reviewed_at';
 const FILTERS = [['all', 'All'], ['booking_pending', 'Bookings to approve'], ['booked', 'Booked'], ['pending', 'Waiting for approval'], ['active', 'Out now'], ['pickup_pending', 'Pickup waiting'], ['closed', 'Closed'], ['cancelled', 'Cancelled']];
 const inIds = (ids) => [...new Set(ids.filter(Boolean))];
 
@@ -191,7 +191,7 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
     const pendingRepl = x.repl.find(r => r.status === 'pending');
     if (['booking_pending', 'booked'].includes(d.status) && !pendingRepl) A('Replace vehicle', { ic: 'move', onClick: () => openReplaceBooking({ booking: { ...d, vehicle_number: x.bookVeh?.number, advance_received: advLeft }, onDone: reload }) });
     if (d.status === 'booked') {
-      P('Hand over', { ic: 'bike', onClick: () => openDeliveryForm({ mode: 'deliver', booking: { ...d, vehicle_number: x.bookVeh?.number }, onDone: reload }) });
+      P('Hand over', { ic: 'bike', onClick: () => openDeliveryForm({ mode: 'deliver', booking: { ...d, vehicle_number: x.bookVeh?.number, advance_received: advLeft }, onDone: reload }) });
       A('Cancel booking', { ic: 'ban', onClick: () => cancel(d) });
     }
     if (d.status === 'pending') {
@@ -240,7 +240,7 @@ export async function openDeliveryDetail(id, { onChange } = {}) {
       rentCmp(d, x),
       h('div', { class: 'action-bar' }, actions),
       h('div', { class: 'bento detail-bento' }, sectionBlock('Details', h('dl', { class: 'kvs' },
-        d.booking_name ? kv('Booking name', d.booking_name) : null, d.booking_phone ? kv('Booking phone', fmtPhone(d.booking_phone)) : null,
+        d.booking_name ? kv('Booking name', d.booking_name) : null, d.booking_phone ? kv('Booking phone', fmtPhone(d.booking_phone)) : null, d.booking_place ? kv('Delivery location (booking)', d.booking_place) : null,
         !d.booking_name ? kv('Booking details (typed at booking)', d.booking_text ? h('span', { class: 'prewrap' }, d.booking_text) : null) : null,
         x.bookVeh && ['booked', 'booking_pending'].includes(d.status) ? kv('Vehicle locked for this booking', h('span', null, `${x.bookVeh.number}, ${model(x.bookVeh.model_id)?.name || ''}`, d.booking_for && d.booking_days ? h('small', { class: 'cell-note' }, `Locked ${fmtDateTimeY(d.booking_for)} to ${fmtDateTimeY(new Date(new Date(d.booking_for).getTime() + d.booking_days * 86400000))} (${d.booking_days} day${d.booking_days === 1 ? '' : 's'})`) : null)) : null,
         ['booked', 'booking_pending'].includes(d.status) && d.booking_days && !x.bookVeh ? kv('Days booked', String(d.booking_days)) : null,
