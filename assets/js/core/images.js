@@ -88,6 +88,21 @@ export function lightbox(url, caption) {
   document.body.append(el); document.addEventListener('keydown', onKey, true);
 }
 
+// ---- keep the screen still while a photo is added -----------------------------
+// Taking a photo changes the height of the field (empty box, then a picture). Without this the form jumps and the person has to scroll back.
+function scrollParent(el) {
+  for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) { const o = window.getComputedStyle(n).overflowY; if ((o === 'auto' || o === 'scroll') && n.scrollHeight > n.clientHeight) return n; }
+  return document.scrollingElement || document.documentElement;
+}
+// Runs fn (which repaints the field) and then puts the field back exactly where it was on the screen.
+export function keepInView(el, fn) {
+  const sc = scrollParent(el); const before = el.getBoundingClientRect().top;
+  const restore = () => { if (!el.isConnected) return; const d = el.getBoundingClientRect().top - before; if (Math.abs(d) > 1) sc.scrollTop += d; };
+  fn(); restore(); requestAnimationFrame(restore); setTimeout(restore, 150); setTimeout(restore, 500);
+  return restore;
+}
+function holdHeight(box) { box.style.minHeight = `${box.offsetHeight}px`; const free = () => { box.style.minHeight = ''; }; setTimeout(free, 800); return free; }
+
 // ---- photo picker field -----------------------------------------------------
 // opts: { label, required, existing (path) }
 export function photoField({ label, required = false, existing = null, cameraOnly = false, facing = 'environment' } = {}) {
@@ -104,19 +119,19 @@ export function photoField({ label, required = false, existing = null, cameraOnl
     frame, actions, err, cam, gal);
 
   const paint = async () => {
-    frame.replaceChildren(); actions.replaceChildren();
+    const free = holdHeight(frame); frame.replaceChildren(); actions.replaceChildren();
     const hasExisting = existing && !removedExisting;
     if (picked) {
-      frame.append(h('img', { src: picked.previewUrl, alt: label })); meta.textContent = fmtBytes(picked.size);
+      const pi = h('img', { src: picked.previewUrl, alt: label }); pi.addEventListener('load', () => { free(); keepInView(root, () => {}); }); frame.append(pi); meta.textContent = fmtBytes(picked.size);
     } else if (hasExisting) {
       meta.textContent = 'Saved';
       frame.append(icon('image', 28));
-      signedUrls([existing]).then(m => { if (m[existing]) { frame.replaceChildren(h('img', { src: m[existing], alt: label })); } }).catch(() => {});
+      signedUrls([existing]).then(m => { if (m[existing]) { const ei = h('img', { src: m[existing], alt: label }); ei.addEventListener('load', free); frame.replaceChildren(ei); } }).catch(() => {});
     } else { meta.textContent = ''; frame.append(icon('camera', 28), h('span', 'No photo yet')); }
     frame.classList.toggle('filled', !!(picked || hasExisting));
     if (picked || hasExisting) {
       actions.append(h('button', { type: 'button', class: 'btn btn-secondary btn-sm', on: { click: () => cam.click() } }, icon('camera', 16), h('span', 'Retake')),
-        h('button', { type: 'button', class: 'btn btn-ghost btn-sm', on: { click: () => { clearPicked(); removedExisting = !!existing; paint(); } } }, icon('x', 16), h('span', 'Remove')));
+        h('button', { type: 'button', class: 'btn btn-ghost btn-sm', on: { click: () => { clearPicked(); removedExisting = !!existing; keepInView(root, paint); } } }, icon('x', 16), h('span', 'Remove')));
     } else {
       actions.append(h('button', { type: 'button', class: 'btn btn-secondary btn-sm', on: { click: () => cam.click() } }, icon('camera', 16), h('span', 'Take photo')),
         cameraOnly ? null : h('button', { type: 'button', class: 'btn btn-ghost btn-sm', on: { click: () => gal.click() } }, icon('image', 16), h('span', 'Choose file')));
@@ -132,7 +147,7 @@ export function photoField({ label, required = false, existing = null, cameraOnl
       clearPicked(); picked = { ...r, previewUrl: URL.createObjectURL(r.blob) }; removedExisting = false;
       api.setError('');
     } catch (e) { toast(e.message, 'error'); }
-    paint();
+    keepInView(root, paint);
   };
   cam.addEventListener('change', () => onFile(cam)); gal.addEventListener('change', () => onFile(gal));
 
@@ -158,7 +173,7 @@ export function multiPhotoField({ label, max = 5, existing = [] } = {}) {
   const root = h('div', { class: 'photo' }, h('div', { class: 'photo-head' }, h('span', { class: 'field-label' }, label), h('span', { class: 'photo-size' }, `Up to ${max}`)), grid, gal, cam);
   const total = () => kept.length + items.length;
   const paint = () => {
-    grid.replaceChildren();
+    holdHeight(grid); grid.replaceChildren();
     kept.forEach((p, i) => {
       const tile = h('div', { class: 'tile filled' }, icon('image', 22));
       signedUrls([p]).then(m => m[p] && tile.prepend(h('img', { src: m[p], alt: `${label} ${i + 1}` }))).catch(() => {});
@@ -177,7 +192,7 @@ export function multiPhotoField({ label, max = 5, existing = [] } = {}) {
     const files = [...(input.files || [])]; input.value = '';
     for (const f of files) {
       if (total() >= max) { toast(`Only ${max} photos allowed here.`, 'error'); break; }
-      try { const r = await compressImage(f); items.push({ ...r, previewUrl: URL.createObjectURL(r.blob) }); paint(); }
+      try { const r = await compressImage(f); items.push({ ...r, previewUrl: URL.createObjectURL(r.blob) }); keepInView(root, paint); }
       catch (e) { toast(e.message, 'error'); }
     }
   };

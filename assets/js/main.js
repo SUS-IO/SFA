@@ -1,7 +1,7 @@
 import { cfg, configured } from './core/supa.js';
 import { state, loadRefs, can } from './core/store.js';
 import * as session from './core/session.js';
-import { h, mount, icon, btn, toast, initials, friendlyError, ROLE_LABEL } from './core/ui.js';
+import { h, mount, icon, btn, toast, initials, friendlyError, greeting, fmtDate, ROLE_LABEL } from './core/ui.js';
 import { loginView, setupNeeded, brandMark } from './views/login.js';
 import { forcedPasswordView, openAccount } from './views/account.js';
 import { loadTodo } from './core/todo.js';
@@ -34,6 +34,11 @@ const ROUTES = {
 };
 const SIDE = ['dashboard', 'deliveries', 'inbox', 'live', 'money', 'attendance', 'accounts', 'reports', 'customers', 'vehicles', 'helmets', 'movement', 'logs', 'settings', 'admin'];
 const TABS = ['dashboard', 'deliveries', 'inbox', 'money'];
+// The menu is grouped so a long list stays easy to scan.
+const GROUPS = [['Overview', ['dashboard', 'inbox']], ['Operations', ['deliveries', 'live', 'movement', 'attendance']], ['Masters', ['customers', 'vehicles', 'helmets']],
+  ['Finance', ['money', 'accounts', 'reports']], ['System', ['logs', 'settings', 'admin']]];
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 
 let cleanup = null, watching = false, shell = null;
 
@@ -76,22 +81,30 @@ function buildShell() {
   const openMenu = (links) => openAccount({ links, onSignOut: doSignOut });
   const titleEl = h('h1', { class: 'topbar-title' }, '');
 
+  const allowed = new Set(sideItems);
+  const groupsEl = GROUPS.map(([label, names]) => { const items = names.filter(n => allowed.has(n)); return items.length ? h('div', { class: 'side-group' }, h('p', { class: 'side-label' }, label), items.map(n => nav(n, 'side-link'))) : null; });
+  const shellEl = h('div', { class: 'shell' + (lsGet('sfa-side') === 'min' ? ' collapsed' : '') });
+  const collapse = h('button', { type: 'button', class: 'side-toggle', 'aria-label': 'Shrink or expand the menu', title: 'Shrink or expand the menu', on: { click: () => { const on = shellEl.classList.toggle('collapsed'); lsSet('sfa-side', on ? 'min' : 'full'); collapse.setAttribute('aria-expanded', String(!on)); } } }, icon('menu', 20));
+  collapse.setAttribute('aria-expanded', String(!shellEl.classList.contains('collapsed')));
   const side = h('aside', { class: 'side' },
-    h('div', { class: 'brand' }, brandMark(34), h('span', { class: 'brand-name' }, cfg.APP_NAME)),
-    h('nav', { class: 'side-nav', 'aria-label': 'Main' }, sideItems.map(n => nav(n, 'side-link'))),
-    h('button', { type: 'button', class: 'side-user', on: { click: () => openMenu([]) } },
+    h('div', { class: 'brand' }, brandMark(40), h('span', { class: 'brand-text' }, h('span', { class: 'brand-name' }, cfg.APP_NAME), h('small', 'Bike Rental ERP')), collapse),
+    h('nav', { class: 'side-nav', 'aria-label': 'Main' }, groupsEl),
+    h('button', { type: 'button', class: 'side-user', title: 'Account', on: { click: () => openMenu([]) } },
       h('span', { class: 'avatar' }, initials(state.me.user_name)),
       h('span', { class: 'side-user-text' }, h('strong', state.me.user_name), h('small', ROLE_LABEL[state.me.role])), icon('right', 18)));
+  side.querySelectorAll('.side-link').forEach(a => a.setAttribute('title', a.textContent.replace(/\d+\+?$/, '').trim()));
 
-  const top = h('header', { class: 'topbar' }, brandMark(30), titleEl,
-    h('button', { type: 'button', class: 'avatar-btn', 'aria-label': 'Account', on: { click: () => openMenu([]) } }, h('span', { class: 'avatar' }, initials(state.me.user_name))));
+  const bell = h('a', { class: 'bell', href: '#/inbox', 'aria-label': 'To do', title: 'To do' }, icon('inbox', 20), h('b', { class: 'nav-badge', hidden: true, 'aria-label': 'items waiting' }));
+  const top = h('header', { class: 'topbar' }, brandMark(32), titleEl, h('span', { class: 'topbar-date' }, fmtDate(new Date())), bell,
+    h('button', { type: 'button', class: 'avatar-btn', 'aria-label': 'Account', on: { click: () => openMenu([]) } }, h('span', { class: 'avatar' }, initials(state.me.user_name)),
+      h('span', { class: 'avatar-name' }, h('strong', state.me.user_name.split(/\s+/)[0]), h('small', ROLE_LABEL[state.me.role]))));
 
   const view = h('main', { class: 'view', id: 'view', tabindex: '-1' });
   const tabbar = h('nav', { class: 'tabbar', 'aria-label': 'Main' },
     TABS.map(n => nav(n, 'tab')),
     h('button', { type: 'button', class: 'tab', dataset: { route: 'more' }, on: { click: () => openMenu(moreLinks) } }, icon('menu', 22), h('span', 'More')));
 
-  const el = h('div', { class: 'shell' }, side, h('div', { class: 'main' }, top, view), tabbar);
+  const el = shellEl; el.append(side, h('div', { class: 'main' }, top, view), tabbar);
   return {
     el, view,
     async refreshBadge() {
@@ -106,6 +119,7 @@ function buildShell() {
 }
 
 async function doSignOut() {
+  try { sessionStorage.removeItem('sfa-welcomed'); } catch { /* ignore */ }
   stopAgeingWatch();
   await session.signOut(); shell = null; location.hash = '';
   showLogin();
@@ -122,12 +136,15 @@ async function enterApp() {
   }
   if (state.me.must_change_password) return mount(app, forcedPasswordView({ onDone: enterApp }));
   shell = buildShell(); mount(app, shell.el);
+  if (!sessionStorage.getItem('sfa-welcomed')) { try { sessionStorage.setItem('sfa-welcomed', '1'); } catch { /* ignore */ } toast(`${greeting()}, ${state.me.user_name.split(/\s+/)[0]}. Welcome back.`); }
   if (!watching) { watching = true; session.watchExpiry(() => { stopAgeingWatch(); shell = null; showLogin(`Your ${cfg.SESSION_HOURS}-hour session ended. Please sign in again.`); }); }
   if (!location.hash) history.replaceState(null, '', '#/dashboard');
   route();
   startAgeingWatch();    // popup for Approver, Manager, Admin and Superadmin when assets go 4+ hours without an update
 }
 window.addEventListener('hashchange', route);
+// Signed out in another tab or window: sign out here too.
+window.addEventListener('storage', (e) => { if (e.key === 'sfa-auth' && !e.newValue && state.me) { stopAgeingWatch(); state.me = null; shell = null; showLogin('You were signed out.'); } });
 
 (async function boot() {
   if (!configured) return mount(app, setupNeeded());

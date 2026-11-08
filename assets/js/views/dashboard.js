@@ -3,9 +3,9 @@ import { sb, fetchAll } from '../core/supa.js';
 import { state, can, placeOf, availability, whoName, activeLocations } from '../core/store.js';
 import { loadTodo } from '../core/todo.js';
 
-const SEG = ['#1565C0', '#4A8FD9', '#0E3F7A', '#7DB0E8'];       // office shades
+const SEG = ['#3B424C', '#5E6873', '#8A939E', '#B5BBC4'];       // office shades
 function colorFor(kind, i) {
-  return kind === 'office' ? SEG[i % SEG.length] : kind === 'service' ? '#F26A8D' : kind === 'customer' ? '#102A43' : kind === 'waiting' ? '#F2A65A' : '#7FD3DF';
+  return kind === 'office' ? SEG[i % SEG.length] : kind === 'service' ? '#E8590C' : kind === 'customer' ? '#8E1A2D' : kind === 'waiting' ? '#F2A65A' : '#9AA3AD';
 }
 
 // Group items by place, in a stable order: offices, service centres, with customers, in transit.

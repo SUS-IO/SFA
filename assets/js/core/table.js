@@ -7,26 +7,28 @@ export function ensureTableStyles() {
   if (styled || typeof document === 'undefined') return; styled = true;
   const el = document.createElement('style'); el.id = 'dt-styles';
   el.textContent = `
-.dt-wrap{border:1px solid rgba(128,128,128,.28);border-radius:12px;overflow:auto;max-height:72vh;margin-top:.5rem;background:var(--surface,transparent)}
+.dt-wrap{border:1px solid var(--line,#e3e6eb);border-radius:16px;overflow:auto;max-height:calc(100vh - 250px);min-height:200px;margin-top:.5rem;background:#fff;box-shadow:var(--shadow,none)}
 .dt{width:100%;border-collapse:separate;border-spacing:0;font-size:.92rem;min-width:900px}
-.dt th,.dt td{padding:.6rem .75rem;text-align:left;vertical-align:top;border-top:1px solid rgba(128,128,128,.2)}
-.dt thead th{position:sticky;top:0;z-index:2;border-top:0;background:var(--surface-2,#eef1f6);font-size:.78rem;font-weight:600;white-space:nowrap}
-@media (prefers-color-scheme: dark){.dt thead th{background:#1d2230}}
-:root[data-theme="dark"] .dt thead th{background:#1d2230}
-:root[data-theme="light"] .dt thead th{background:#eef1f6}
-.dt th button{all:unset;cursor:pointer;display:inline-flex;gap:.3rem;align-items:center}
-.dt th button:focus-visible{outline:2px solid currentColor;outline-offset:2px}
-.dt th .arr{opacity:.3;font-size:.7rem}
+.dt th,.dt td{padding:.7rem .85rem;text-align:left;vertical-align:top;border-top:1px solid var(--line,#e3e6eb)}
+.dt thead th{position:sticky;top:0;z-index:2;border-top:0;background:#F1F3F6;color:var(--charcoal,#3b424c);font-size:.74rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;box-shadow:inset 0 -2px 0 var(--line-2,#cdd2d9)}
+.dt th button{all:unset;cursor:pointer;display:inline-flex;gap:.35rem;align-items:center;letter-spacing:inherit;text-transform:inherit}
+.dt th button:hover{color:var(--crimson,#8e1a2d)}
+.dt th button:focus-visible{outline:2px solid var(--crimson,#8e1a2d);outline-offset:2px}
+.dt th .arr{opacity:.35;font-size:.7rem}
+.dt th[aria-sort="ascending"],.dt th[aria-sort="descending"]{color:var(--crimson,#8e1a2d);background:#F9E9EC;box-shadow:inset 0 -3px 0 var(--crimson,#8e1a2d)}
 .dt th[aria-sort="ascending"] .arr,.dt th[aria-sort="descending"] .arr{opacity:1}
+.dt tbody tr:nth-child(even) td{background:#FAFBFC}
+.dt td.sorted{background:rgba(142,26,45,.05)!important;font-weight:600}
 .dt td small{display:block;opacity:.72;margin-top:.1rem}
 .dt td.nowrap{white-space:nowrap}
-.dt tr.hot td{background:rgba(242,106,141,.09)}
+.dt tr.hot td{background:rgba(232,89,12,.09)!important}
 .dt tr.clk{cursor:pointer}
-.dt tr.clk:hover td{background:rgba(128,128,128,.1)}
-.dt tr.sel td{background:rgba(66,133,244,.1)}
+.dt tr.clk:hover td{background:#F7ECEE!important}
+.dt tr.sel td{background:rgba(142,26,45,.12)!important}
 .dt .ck{width:34px}
-.dt input[type=checkbox]{width:18px;height:18px}
-.dt-empty{padding:1.5rem;text-align:center;opacity:.75}
+.dt input[type=checkbox]{width:18px;height:18px;accent-color:var(--crimson,#8e1a2d)}
+.dt-empty{padding:2rem;text-align:center;opacity:.75}
+.dt-count{font-size:.8rem;color:var(--ink-2,#66707b);margin:.25rem .1rem}
 `;
   document.head.append(el);
 }
@@ -83,6 +85,7 @@ export function dataTable({ columns, rowKey = 'id', defaultSort = null, selectab
       const tr = h('tr', { class: cls + (rowClick ? ' clk' : ''), on: rowClick ? { click: (e) => { if (e.target.closest('a,button,input,select,label')) return; rowClick(r); } } : {} }, selectable ? h('td', { class: 'ck' }, box) : null, columns.map(c => h('td', { class: c.nowrap ? 'nowrap' : '' }, c.render ? c.render(r) : String(c.sort?.(r) ?? ''))));
       return tr;
     }));
+    if (sort && columns.some(c => c.key === sort.key && c.sort)) { const ci = columns.findIndex(c => c.key === sort.key) + (selectable ? 1 : 0) + 1; body.querySelectorAll(`tr > td:nth-child(${ci})`).forEach(td => td.classList.add('sorted')); }
     syncAll();
   }
   function syncAll() { if (allBox) allBox.checked = shown.length > 0 && shown.every(r => selected.has(r[rowKey])); }

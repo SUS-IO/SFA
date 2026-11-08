@@ -52,7 +52,7 @@ export function openAccount({ links = [], onSignOut }) {
       h('div', { class: 'menu-list' },
         h('button', { type: 'button', class: 'menu-item', on: { click: () => { s.close(); openChangePassword(); } } }, icon('key', 20), h('span', 'Change password'), icon('right', 18)),
         h('button', { type: 'button', class: 'menu-item', on: { click: () => { s.close(); onSignOut(); } } }, icon('logout', 20), h('span', 'Sign out'), icon('right', 18))),
-      h('p', { class: 'muted small' }, `You will be signed out automatically at ${fmtTime(endsAt)} (${cfg.SESSION_HOURS} hours after you signed in), or when you close the browser.`)),
+      h('p', { class: 'muted small' }, `You will be signed out automatically at ${fmtTime(endsAt)} (${cfg.SESSION_HOURS} hours after you signed in). Closing the browser does not sign you out.`)),
   });
   return s;
 }

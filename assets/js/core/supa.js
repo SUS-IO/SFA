@@ -1,11 +1,11 @@
-// Supabase client. The login lives in sessionStorage, so closing the tab or
-// browser signs the user out. A 6-hour limit (session.js) applies on top.
+// Supabase client. The login is kept in localStorage, so closing the tab or the browser does NOT sign the user out.
+// The person is signed out only when the session length set by the Admin (Settings > Time limits, default 6 hours) is over (session.js).
 const C = Object.assign({ APP_NAME: 'SFA Bike', EMAIL_DOMAIN: 'sfabike.app', SESSION_HOURS: 6 }, window.SFA_CONFIG || {});
 export const cfg = C;
 export const configured = !!(C.SUPABASE_URL && C.SUPABASE_ANON_KEY && !/YOUR-/.test(C.SUPABASE_URL + C.SUPABASE_ANON_KEY));
 
 function sessionStore() {
-  try { const k = '__t'; window.sessionStorage.setItem(k, '1'); window.sessionStorage.removeItem(k); return window.sessionStorage; }
+  try { const k = '__t'; window.localStorage.setItem(k, '1'); window.localStorage.removeItem(k); return window.localStorage; }
   catch { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: k => m.delete(k) }; }
 }
 export const store = sessionStore();

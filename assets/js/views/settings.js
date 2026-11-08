@@ -56,7 +56,7 @@ function listsTab(panel) {
 function timeTab(panel) {
   const s = state.settings || {};
   const sess = input({ type: 'number', min: '1', max: '72', step: '0.5', value: String(s.session_hours ?? 6) }), stale = input({ type: 'number', min: '0.5', max: '168', step: '0.5', value: String(s.stale_hours ?? 4) });
-  const fS = field('Session length (hours)', sess, { hint: 'People are signed out automatically this many hours after they sign in.' });
+  const fS = field('Session length (hours)', sess, { hint: 'People stay signed in when they close the browser, and are signed out automatically this many hours after they sign in.' });
   const gapIn = input({ type: 'number', min: '0.5', max: '168', step: '0.5', value: String(s.call_gap_hours ?? 24) });
   const fG = field('Flag customers not called for (hours)', gapIn, { hint: 'On the Live customers page, a customer with no call in this many hours is marked in red.' });
   const fA = field('Alert after (hours without an update)', stale, { hint: 'A vehicle or helmet that is not with a customer and has no update for this long is flagged on the Vehicle status page and in the reminder popup.' });
