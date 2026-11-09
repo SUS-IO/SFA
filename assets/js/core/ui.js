@@ -37,7 +37,7 @@ export function mount(el, ...kids) { clear(el); appendKids(el, kids); return el;
 const P = {
   home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/><path d="M10 19.5v-5h4v5"/>',
   users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 19c.5-3.2 3-5 6-5s5.5 1.8 6 5"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14.2c2.3.2 3.8 1.7 4.2 4.3"/>',
-  bike: '<circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M5.5 14h4l3-6h3.5l2.5 3M15 8h2.5a1.5 1.5 0 0 1 1.5 1.5V11M12 8l-2 5.5"/>',
+  bike: '<circle cx="6" cy="16.5" r="3.3"/><circle cx="18" cy="16.5" r="3.3"/><path d="M6 16.5 9.5 9H14l3.5 7.5M14 9l-1.2-3.2H10.5M9.8 13h7.4"/>',
   helmet: '<path d="M4 15a8 8 0 0 1 16 0v2.5a.8.8 0 0 1-.8.8H9.5L7 15.5H4z"/><path d="M12 7v4h8"/>',
   list: '<path d="M8.5 6.5H20M8.5 12H20M8.5 17.5H20"/><circle cx="4.5" cy="6.5" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="17.5" r="1"/>',
   shield: '<path d="M12 3 4.5 6v5.5c0 4.6 3.1 8 7.5 9.5 4.4-1.5 7.5-4.9 7.5-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
@@ -69,6 +69,9 @@ const P = {
   lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   wallet: '<path d="M4 7.5h14.5A1.5 1.5 0 0 1 20 9v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18z"/><path d="M4 7.5 15 4.5v3M16 14h2.5"/>',
   inbox: '<path d="M4 13.5 6.5 5.5h11L20 13.5V19H4z"/><path d="M4 13.5h4.5a3.5 3.5 0 0 0 7 0H20"/>',
+  moon: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',
+  help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2 1-1.2 1.8M12 16.8v.1"/>',
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.1"/>',
 };
 export function icon(name, size = 20, cls = '') {

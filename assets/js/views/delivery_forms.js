@@ -15,7 +15,6 @@ import { openCustomerView } from '../core/customer_view.js';
 import { oldPhotoCell } from '../core/slider.js';
 
 const MONEY = /^\d+(\.\d{1,2})?$/;
-const KM_LIMITS = [100, 150, 200, 250, 300, 400, 500];
 const folderId = () => Math.random().toString(36).slice(2, 10);
 const moneyInput = (ph = '0') => input({ inputmode: 'decimal', placeholder: ph });
 const wholeInput = (ph = '') => input({ inputmode: 'numeric', placeholder: ph });
@@ -49,13 +48,9 @@ const checkWhole = (f, inp, { min = 0, label = 'a whole number' } = {}) => {
   return true;
 };
 function kmLimitField() {
-  const sel = select([{ value: '', label: 'Choose' }, ...KM_LIMITS.map(k => ({ value: String(k), label: `${k} km per day` })), { value: 'more', label: 'More than 500' }]);
-  const other = wholeInput('Km per day'); other.hidden = true;
-  const f = field('Km limit per day', h('div', { class: 'stack-sm' }, sel, other), { required: true, hint: 'The most the customer may ride each day. 100 or more.' });
-  sel.addEventListener('change', () => { other.hidden = sel.value !== 'more'; f.setError(''); });
-  return { el: f, set(v) { v = String(v ?? ''); if (!v) { sel.value = ''; other.hidden = true; return; } if (KM_LIMITS.map(String).includes(v)) { sel.value = v; other.hidden = true; } else { sel.value = 'more'; other.value = v; other.hidden = false; } },
-    value: () => (sel.value === 'more' ? other.value.trim() : sel.value),
-    validate() { const v = this.value(); if (!/^\d+$/.test(v) || Number(v) < 100) { f.setError('Choose the km limit, 100 or more.'); return false; } return true; } };
+  // Fixed by policy: 100 km per day. Shown as plain text, nobody can change it.
+  const f = field('Km limit per day', h('div', { class: 'fixed-val' }, h('strong', {}, '100 km per day'), h('span', { class: 'muted' }, ' Fixed for every rental')), { hint: 'Set by the company. Extra kilometres are charged at the rate below.' });
+  return { el: f, set() {}, value: () => '100', validate: () => true };
 }
 
 const SET_SIDES = [['odometer', 'Odometer reading'], ['front', 'Front'], ['back', 'Rear'], ['left', 'Left side'], ['right', 'Right side']];

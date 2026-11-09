@@ -71,7 +71,7 @@ export async function render(root, params) {
         render: (r) => h('span', null, h('strong', { class: 'code' }, code(r)), v ? h('small', [model(r.model_id)?.name, r.brand].filter(Boolean).join(', ')) : h('small', [r.name, r.helmet_type].filter(Boolean).join(', ')),
           h('a', { class: 'mv-hist', href: `#/${st.kind}?open=${r.id}` }, 'History')), csv: (r) => code(r) },
       ...(v ? [{ key: 'model', label: 'Model', sort: (r) => model(r.model_id)?.name || '', csv: (r) => model(r.model_id)?.name || '', render: (r) => model(r.model_id)?.name || '' }] : []),
-      { key: 'status', label: 'Status', sort: (r) => statusOf(r).rank * 1e6 + (isStale(r) ? 0 : 1e5) + Math.min(9e4, 9e4 - ageHours(r.last_at)), csv: (r) => statusOf(r).label,
+      { key: 'status', label: 'Status', sort: (r) => statusOf(r).rank * 1e6 + (isStale(r) ? 0 : 1e5) + (r.last_at ? Math.max(0, 9e4 - Math.min(9e4, ageHours(r.last_at))) : 0), csv: (r) => statusOf(r).label,
         render: (r) => { const s = statusOf(r); return h('span', null, chip(s.label, s.kind), isStale(r) ? h('small', { class: 'mv-age' }, `Not updated for ${fmtAge(ageHours(r.last_at))}`) : null, r.status === 'blocked' ? null : null); } },
       { key: 'where', label: 'Where now', sort: (r) => placeOf(asItem(r)).label, csv: (r) => placeOf(asItem(r)).label, render: (r) => placeChip(asItem(r)) },
       { key: 'with', label: 'With customer', sort: (r) => r.customer_name || '', csv: (r) => [r.customer_name, r.customer_mobile, r.delivery_code].filter(Boolean).join(' '),

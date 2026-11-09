@@ -2,7 +2,7 @@
 // The person is signed out only when the session length set by the Admin (Settings > Time limits, default 6 hours) is over (session.js).
 const C = Object.assign({ APP_NAME: 'SFA Bike', EMAIL_DOMAIN: 'sfabike.app', SESSION_HOURS: 6 }, window.SFA_CONFIG || {});
 export const cfg = C;
-export const configured = !!(C.SUPABASE_URL && C.SUPABASE_ANON_KEY && !/YOUR-/.test(C.SUPABASE_URL + C.SUPABASE_ANON_KEY));
+export const configured = !!(C.SUPABASE_URL && C.SUPABASE_ANON_KEY && !/YOUR[-_]|PASTE_/.test(C.SUPABASE_URL + C.SUPABASE_ANON_KEY));
 
 function sessionStore() {
   try { const k = '__t'; window.localStorage.setItem(k, '1'); window.localStorage.removeItem(k); return window.localStorage; }

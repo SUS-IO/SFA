@@ -1,3 +1,4 @@
+import { quickStartPanel } from '../core/help.js';
 import { h, icon, btn, statusBadge, chip, emptyState, greeting, fmtDate, fmtDateTime, mount } from '../core/ui.js';
 import { sb, fetchAll } from '../core/supa.js';
 import { state, can, placeOf, availability, whoName, activeLocations } from '../core/store.js';
@@ -45,7 +46,7 @@ function fleetPanel({ title, noun, route, items }) {
 
 export async function render(root) {
   const first = state.me.user_name.split(/\s+/)[0];
-  mount(root, h('div', { class: 'page-head' }, h('div', null, h('h1', `${greeting()}, ${first}`), h('p', { class: 'muted' }, fmtDate(new Date()))),
+  mount(root, h('div', { class: 'page-head greet' }, h('div', null, h('h1', `${greeting()}, ${first} 👋`), h('p', fmtDate(new Date()))),
     h('div', { class: 'page-actions' },
       btn('New delivery', { kind: 'primary', ic: 'plus', onClick: () => { location.hash = '#/deliveries?new=1'; } }),
       btn('New customer', { ic: 'users', onClick: () => { location.hash = '#/customers?new=1'; } }))),
@@ -62,10 +63,10 @@ export async function render(root) {
   if (pendingList.error) throw pendingList.error;
   const pending = pendingRes.count || 0;
 
-  const tile = (n, label, href, hot) => h('a', { class: `stat ${hot && n ? 'hot' : ''}`, href }, h('strong', String(n)), h('span', label));
+  const tile = (n, label, href, hot, ic = 'list', tone = 'blue') => h('a', { class: `stat ${hot && n ? 'hot' : ''}`, href }, h('i', { class: `stat-ic tone-${tone}` }, icon(ic, 20)), h('span', { class: 'stat-txt' }, h('em', label), h('strong', String(n))));
   const stats = todo ? h('div', { class: 'stat-row' },
-    tile(todo.count, 'on your to do list', '#/inbox', true), tile(todo.out.length, 'vehicles out with customers', '#/deliveries?status=active', false),
-    tile(todo.overdue.length, 'overdue returns', '#/deliveries?status=active', true), tile(pending, 'customers waiting for approval', '#/customers?status=pending', false)) : null;
+    tile(todo.count, 'on your to do list', '#/inbox', true, 'inbox', 'orange'), tile(todo.out.length, 'vehicles out with customers', '#/deliveries?status=active', false, 'bike', 'blue'),
+    tile(todo.overdue.length, 'overdue returns', '#/deliveries?status=active', true, 'alert', 'red'), tile(pending, 'customers waiting for approval', '#/customers?status=pending', false, 'users', 'green')) : null;
   const actionPanel = h('section', { class: 'panel action' },
     h('div', { class: 'panel-head' }, h('h2', can.approve() ? 'Waiting for your approval' : 'Customers waiting for approval'), pending ? h('span', { class: 'count-pill' }, String(pending)) : null),
     pending === 0
@@ -76,11 +77,12 @@ export async function render(root) {
         pending > pendingList.data.length ? h('li', null, h('a', { class: 'work-more', href: '#/customers?status=pending' }, `See all ${pending}`)) : null));
 
   mount(root,
-    h('div', { class: 'page-head' }, h('div', null, h('h1', `${greeting()}, ${first}`), h('p', { class: 'muted' }, fmtDate(new Date()))),
+    h('div', { class: 'page-head greet' }, h('div', null, h('h1', `${greeting()}, ${first} 👋`), h('p', fmtDate(new Date()))),
       h('div', { class: 'page-actions' },
         can.createBooking() ? btn('New booking', { ic: 'clock', onClick: () => { location.hash = '#/deliveries?new=booking'; } }) : null,
         btn('New delivery', { kind: 'primary', ic: 'plus', onClick: () => { location.hash = '#/deliveries?new=1'; } }),
         btn('New customer', { ic: 'users', onClick: () => { location.hash = '#/customers?new=1'; } }))),
+    quickStartPanel(),
     stats,
     h('div', { class: 'dash-grid' },
       h('div', { class: 'dash-col' }, actionPanel),

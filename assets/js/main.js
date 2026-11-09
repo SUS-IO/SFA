@@ -7,6 +7,7 @@ import { forcedPasswordView, openAccount } from './views/account.js';
 import { loadTodo } from './core/todo.js';
 import { loadSettings } from './core/settings.js';
 import { startSearchableSelects } from './core/ss.js';
+import { openHelp, SUBTITLES } from './core/help.js';
 import { startAgeingWatch, stopAgeingWatch } from './core/ageing.js';
 
 const app = document.getElementById('app');
@@ -37,6 +38,9 @@ const TABS = ['dashboard', 'deliveries', 'inbox', 'money'];
 // The menu is grouped so a long list stays easy to scan.
 const GROUPS = [['Overview', ['dashboard', 'inbox']], ['Operations', ['deliveries', 'live', 'movement', 'attendance']], ['Masters', ['customers', 'vehicles', 'helmets']],
   ['Finance', ['money', 'accounts', 'reports']], ['System', ['logs', 'settings', 'admin']]];
+const curTheme = () => document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+const setTheme = (t) => { document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('sfa-theme', t); } catch { /* ignore */ } };
+try { const t = localStorage.getItem('sfa-theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch { /* ignore */ }
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 
@@ -79,7 +83,7 @@ function buildShell() {
   const sideItems = SIDE.filter(n => !ROUTES[n].guard || ROUTES[n].guard());
   const moreLinks = SIDE.filter(n => !TABS.includes(n) && (!ROUTES[n].guard || ROUTES[n].guard())).map(n => ({ href: '#/' + n, label: ROUTES[n].title, icon: ROUTES[n].icon }));
   const openMenu = (links) => openAccount({ links, onSignOut: doSignOut });
-  const titleEl = h('h1', { class: 'topbar-title' }, '');
+  const titleEl = h('h1', { class: 'topbar-title' }, ''); const subEl = h('p', { class: 'topbar-sub' }, ''); let curRoute = 'dashboard', curTitle = 'Home';
 
   const allowed = new Set(sideItems);
   const groupsEl = GROUPS.map(([label, names]) => { const items = names.filter(n => allowed.has(n)); return items.length ? h('div', { class: 'side-group' }, h('p', { class: 'side-label' }, label), items.map(n => nav(n, 'side-link'))) : null; });
@@ -95,7 +99,11 @@ function buildShell() {
   side.querySelectorAll('.side-link').forEach(a => a.setAttribute('title', a.textContent.replace(/\d+\+?$/, '').trim()));
 
   const bell = h('a', { class: 'bell', href: '#/inbox', 'aria-label': 'To do', title: 'To do' }, icon('inbox', 20), h('b', { class: 'nav-badge', hidden: true, 'aria-label': 'items waiting' }));
-  const top = h('header', { class: 'topbar' }, brandMark(32), titleEl, h('span', { class: 'topbar-date' }, fmtDate(new Date())), bell,
+  const themeBtn = h('button', { type: 'button', class: 'top-ic', 'aria-label': 'Switch light or dark look', title: 'Switch light or dark look', on: { click: () => { setTheme(curTheme() === 'dark' ? 'light' : 'dark'); paintTheme(); } } });
+  const paintTheme = () => { themeBtn.replaceChildren(icon(curTheme() === 'dark' ? 'sun' : 'moon', 19)); };
+  paintTheme();
+  const helpBtn = h('button', { type: 'button', class: 'top-ic', 'aria-label': 'Help for this screen', title: 'Help for this screen', on: { click: () => openHelp(curRoute, curTitle) } }, icon('help', 19));
+  const top = h('header', { class: 'topbar' }, brandMark(32), h('div', { class: 'topbar-titles' }, titleEl, subEl), h('span', { class: 'topbar-date' }, fmtDate(new Date())), helpBtn, themeBtn, bell,
     h('button', { type: 'button', class: 'avatar-btn', 'aria-label': 'Account', on: { click: () => openMenu([]) } }, h('span', { class: 'avatar' }, initials(state.me.user_name)),
       h('span', { class: 'avatar-name' }, h('strong', state.me.user_name.split(/\s+/)[0]), h('small', ROLE_LABEL[state.me.role]))));
 
@@ -113,7 +121,7 @@ function buildShell() {
     setActive(name, title) {
       el.querySelectorAll('[data-route]').forEach(a => a.classList.toggle('active', a.dataset.route === name || (a.dataset.route === 'more' && !TABS.includes(name))));
       el.querySelectorAll('[data-route]').forEach(a => a.dataset.route === name ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
-      titleEl.textContent = title; document.title = `${title} | ${cfg.APP_NAME}`;
+      titleEl.textContent = title; subEl.textContent = SUBTITLES[name] || ''; curRoute = name; curTitle = title; document.title = `${title} | ${cfg.APP_NAME}`;
     },
   };
 }
